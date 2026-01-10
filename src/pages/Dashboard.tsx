@@ -2,7 +2,6 @@ import { format } from 'date-fns';
 import { UpcomingDeadlines } from '@/components/dashboard/UpcomingDeadlines';
 import { TodaySection } from '@/components/dashboard/TodaySection';
 import { AttentionNeeded } from '@/components/dashboard/AttentionNeeded';
-import { ThemePicker } from '@/components/shared/ThemePicker';
 import { mockCourses, mockAssignments, mockAttentionItems } from '@/data/mockData';
 
 export default function Dashboard() {
@@ -17,9 +16,6 @@ export default function Dashboard() {
         <h1 className="text-2xl font-semibold text-foreground mt-1">
           {greeting}, Alex
         </h1>
-        <div className="flex justify-center mt-4">
-          <ThemePicker />
-        </div>
       </div>
 
       {/* Main Grid */}
