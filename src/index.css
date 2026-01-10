@@ -5,7 +5,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @layer base {
-  :root {
+  :root,
+  .theme-neutral {
     /* Warm neutral palette - Notion-inspired */
     --background: 40 20% 98%;
     --foreground: 220 20% 10%;
@@ -60,6 +61,151 @@
     --sidebar-accent-foreground: 220 20% 15%;
     --sidebar-border: 40 10% 90%;
     --sidebar-ring: 220 20% 15%;
+  }
+
+  /* Sage Theme */
+  .theme-sage {
+    --background: 150 20% 97%;
+    --foreground: 150 25% 10%;
+    --card: 150 15% 99%;
+    --card-foreground: 150 25% 10%;
+    --popover: 150 15% 99%;
+    --popover-foreground: 150 25% 10%;
+    --primary: 150 30% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 150 20% 92%;
+    --secondary-foreground: 150 25% 15%;
+    --muted: 150 15% 90%;
+    --muted-foreground: 150 15% 40%;
+    --accent: 150 20% 88%;
+    --accent-foreground: 150 30% 25%;
+    --border: 150 15% 85%;
+    --input: 150 15% 85%;
+    --ring: 150 30% 40%;
+    --sidebar-background: 150 18% 95%;
+    --sidebar-foreground: 150 20% 25%;
+    --sidebar-primary: 150 30% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 150 20% 88%;
+    --sidebar-accent-foreground: 150 30% 25%;
+    --sidebar-border: 150 15% 88%;
+    --sidebar-ring: 150 30% 40%;
+  }
+
+  /* Ocean Theme */
+  .theme-ocean {
+    --background: 200 25% 97%;
+    --foreground: 200 30% 10%;
+    --card: 200 20% 99%;
+    --card-foreground: 200 30% 10%;
+    --popover: 200 20% 99%;
+    --popover-foreground: 200 30% 10%;
+    --primary: 200 80% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 200 25% 92%;
+    --secondary-foreground: 200 30% 15%;
+    --muted: 200 20% 90%;
+    --muted-foreground: 200 20% 40%;
+    --accent: 200 25% 88%;
+    --accent-foreground: 200 80% 30%;
+    --border: 200 20% 85%;
+    --input: 200 20% 85%;
+    --ring: 200 80% 45%;
+    --sidebar-background: 200 22% 95%;
+    --sidebar-foreground: 200 25% 25%;
+    --sidebar-primary: 200 80% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 200 25% 88%;
+    --sidebar-accent-foreground: 200 80% 30%;
+    --sidebar-border: 200 20% 88%;
+    --sidebar-ring: 200 80% 45%;
+  }
+
+  /* Rose Theme */
+  .theme-rose {
+    --background: 340 20% 97%;
+    --foreground: 340 25% 10%;
+    --card: 340 15% 99%;
+    --card-foreground: 340 25% 10%;
+    --popover: 340 15% 99%;
+    --popover-foreground: 340 25% 10%;
+    --primary: 340 65% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 340 20% 93%;
+    --secondary-foreground: 340 25% 15%;
+    --muted: 340 15% 90%;
+    --muted-foreground: 340 15% 40%;
+    --accent: 340 20% 88%;
+    --accent-foreground: 340 65% 40%;
+    --border: 340 15% 86%;
+    --input: 340 15% 86%;
+    --ring: 340 65% 55%;
+    --sidebar-background: 340 18% 95%;
+    --sidebar-foreground: 340 20% 25%;
+    --sidebar-primary: 340 65% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 340 20% 88%;
+    --sidebar-accent-foreground: 340 65% 40%;
+    --sidebar-border: 340 15% 88%;
+    --sidebar-ring: 340 65% 55%;
+  }
+
+  /* Amber Theme */
+  .theme-amber {
+    --background: 38 30% 97%;
+    --foreground: 38 35% 10%;
+    --card: 38 25% 99%;
+    --card-foreground: 38 35% 10%;
+    --popover: 38 25% 99%;
+    --popover-foreground: 38 35% 10%;
+    --primary: 38 92% 50%;
+    --primary-foreground: 38 40% 10%;
+    --secondary: 38 30% 92%;
+    --secondary-foreground: 38 35% 15%;
+    --muted: 38 25% 90%;
+    --muted-foreground: 38 25% 40%;
+    --accent: 38 30% 88%;
+    --accent-foreground: 38 92% 35%;
+    --border: 38 25% 85%;
+    --input: 38 25% 85%;
+    --ring: 38 92% 50%;
+    --sidebar-background: 38 28% 95%;
+    --sidebar-foreground: 38 30% 25%;
+    --sidebar-primary: 38 92% 50%;
+    --sidebar-primary-foreground: 38 40% 10%;
+    --sidebar-accent: 38 30% 88%;
+    --sidebar-accent-foreground: 38 92% 35%;
+    --sidebar-border: 38 25% 88%;
+    --sidebar-ring: 38 92% 50%;
+  }
+
+  /* Lavender Theme */
+  .theme-lavender {
+    --background: 270 20% 97%;
+    --foreground: 270 25% 10%;
+    --card: 270 15% 99%;
+    --card-foreground: 270 25% 10%;
+    --popover: 270 15% 99%;
+    --popover-foreground: 270 25% 10%;
+    --primary: 270 50% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 270 20% 93%;
+    --secondary-foreground: 270 25% 15%;
+    --muted: 270 15% 90%;
+    --muted-foreground: 270 15% 40%;
+    --accent: 270 20% 88%;
+    --accent-foreground: 270 50% 45%;
+    --border: 270 15% 86%;
+    --input: 270 15% 86%;
+    --ring: 270 50% 60%;
+    --sidebar-background: 270 18% 95%;
+    --sidebar-foreground: 270 20% 25%;
+    --sidebar-primary: 270 50% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 270 20% 88%;
+    --sidebar-accent-foreground: 270 50% 45%;
+    --sidebar-border: 270 15% 88%;
+    --sidebar-ring: 270 50% 60%;
   }
 
   .dark {
