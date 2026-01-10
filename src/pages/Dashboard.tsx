@@ -13,8 +13,8 @@ export default function Dashboard() {
       {/* Header */}
       <div className="animate-fade-up text-center">
         <p className="text-sm text-muted-foreground">{format(today, 'EEEE, MMMM d')}</p>
-        <h1 className="text-2xl font-semibold text-foreground mt-1">
-          {greeting}, Alex
+        <h1 className="text-3xl font-display font-light tracking-tight text-foreground mt-1">
+          {greeting}, <span className="font-medium">Alex</span>
         </h1>
       </div>
 

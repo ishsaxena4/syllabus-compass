@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 
 export type ThemeColor = 'neutral' | 'sage' | 'ocean' | 'rose' | 'amber' | 'lavender';
+export type DarkMode = 'light' | 'dark';
 
 const THEME_KEY = 'syllabus-os-theme';
+const DARK_MODE_KEY = 'syllabus-os-dark-mode';
 
 export function useTheme() {
   const [theme, setTheme] = useState<ThemeColor>(() => {
@@ -10,6 +12,15 @@ export function useTheme() {
       return (localStorage.getItem(THEME_KEY) as ThemeColor) || 'neutral';
     }
     return 'neutral';
+  });
+
+  const [darkMode, setDarkMode] = useState<DarkMode>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(DARK_MODE_KEY) as DarkMode;
+      if (saved) return saved;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return 'light';
   });
 
   useEffect(() => {
@@ -25,7 +36,23 @@ export function useTheme() {
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
 
-  return { theme, setTheme };
+  useEffect(() => {
+    const root = document.documentElement;
+    
+    if (darkMode === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    
+    localStorage.setItem(DARK_MODE_KEY, darkMode);
+  }, [darkMode]);
+
+  const toggleDarkMode = () => {
+    setDarkMode(prev => prev === 'dark' ? 'light' : 'dark');
+  };
+
+  return { theme, setTheme, darkMode, toggleDarkMode };
 }
 
 export const themeOptions: { id: ThemeColor; label: string; color: string }[] = [
