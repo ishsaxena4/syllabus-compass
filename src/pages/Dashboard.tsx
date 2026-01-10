@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import { UpcomingDeadlines } from '@/components/dashboard/UpcomingDeadlines';
 import { TodaySection } from '@/components/dashboard/TodaySection';
 import { AttentionNeeded } from '@/components/dashboard/AttentionNeeded';
+import { ThemePicker } from '@/components/shared/ThemePicker';
 import { mockCourses, mockAssignments, mockAttentionItems } from '@/data/mockData';
 
 export default function Dashboard() {
@@ -9,13 +10,16 @@ export default function Dashboard() {
   const greeting = getGreeting();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="animate-fade-up">
+      <div className="animate-fade-up text-center">
         <p className="text-sm text-muted-foreground">{format(today, 'EEEE, MMMM d')}</p>
         <h1 className="text-2xl font-semibold text-foreground mt-1">
           {greeting}, Alex
         </h1>
+        <div className="flex justify-center mt-4">
+          <ThemePicker />
+        </div>
       </div>
 
       {/* Main Grid */}
