@@ -1,12 +1,12 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Clock, MapPin, ChevronRight, Check, FileText } from 'lucide-react';
+import { ArrowLeft, Mail, Clock, MapPin, ChevronRight, Check, FileText, CalendarDays } from 'lucide-react';
 import { format, isFuture } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { mockCourses, mockAssignments } from '@/data/mockData';
-import { CoursePill } from '@/components/shared/CoursePill';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { AssignmentTypeIcon } from '@/components/shared/AssignmentTypeIcon';
+import { CourseCalendar } from '@/components/course/CourseCalendar';
 
 export default function CourseDetail() {
   const { id } = useParams();
@@ -93,6 +93,7 @@ export default function CourseDetail() {
         <TabsList className="bg-secondary/50 p-1">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="assignments">Assignments</TabsTrigger>
+          <TabsTrigger value="calendar">Calendar</TabsTrigger>
           <TabsTrigger value="syllabus">Syllabus</TabsTrigger>
           <TabsTrigger value="details">Details</TabsTrigger>
         </TabsList>
@@ -175,6 +176,10 @@ export default function CourseDetail() {
               ))}
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="calendar" className="mt-6">
+          <CourseCalendar assignments={assignments} courseColor={course.color} />
         </TabsContent>
 
         <TabsContent value="syllabus" className="mt-6">
