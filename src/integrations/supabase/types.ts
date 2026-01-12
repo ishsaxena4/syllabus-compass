@@ -285,6 +285,13 @@ export type Database = {
             foreignKeyName: "notifications_assignment_id_fkey"
             columns: ["assignment_id"]
             isOneToOne: false
+            referencedRelation: "v_risky_items"
+            referencedColumns: ["entity_id"]
+          },
+          {
+            foreignKeyName: "notifications_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
             referencedRelation: "v_today"
             referencedColumns: ["id"]
           },
@@ -329,6 +336,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_due_soon"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reminder_jobs_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "v_risky_items"
+            referencedColumns: ["entity_id"]
           },
           {
             foreignKeyName: "reminder_jobs_assignment_id_fkey"
@@ -469,7 +483,15 @@ export type Database = {
           source_snippet: string | null
           user_id: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "assignments_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_today: {
         Row: {
