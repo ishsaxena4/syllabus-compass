@@ -39,9 +39,9 @@ export function CourseCalendar({ assignments, courseColor }: CourseCalendarProps
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <div className="grid gap-8 lg:grid-cols-2 w-full">
-        {/* Calendar (full width) */}
-        <div className="w-full">
+      <div className="grid gap-8 lg:grid-cols-2">
+        {/* Calendar */}
+        <div className="flex justify-center lg:justify-start">
           <Calendar
             mode="single"
             selected={selectedDate}
@@ -49,25 +49,8 @@ export function CourseCalendar({ assignments, courseColor }: CourseCalendarProps
             modifiers={modifiers}
             modifiersStyles={modifiersStyles}
             classNames={{
-              months: "w-full",
-              month: "w-full space-y-4",
-              caption: "flex justify-center pt-1 relative items-center",
-              caption_label: "text-sm font-medium",
-              nav: "space-x-1 flex items-center",
-              nav_button: "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 inline-flex items-center justify-center rounded-md border border-input",
-              nav_button_previous: "absolute left-1",
-              nav_button_next: "absolute right-1",
-              table: "w-full border-collapse",
-              head_row: "grid grid-cols-7 w-full",
-              head_cell: "text-muted-foreground font-normal text-sm text-center py-2",
-              row: "grid grid-cols-7 w-full mt-1",
-              cell: "text-center text-sm p-1 relative",
-              day: "w-full aspect-square rounded-full flex items-center justify-center font-normal hover:bg-accent/50 transition-colors",
-              day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
-              day_today: "bg-accent text-accent-foreground",
-              day_outside: "text-muted-foreground opacity-50",
-              day_disabled: "text-muted-foreground opacity-50",
-              day_hidden: "invisible",
+              day_selected: "bg-primary text-primary-foreground rounded-md",
+              day_today: "bg-accent text-accent-foreground rounded-md",
             }}
             components={{
               DayContent: ({ date }) => {
@@ -84,7 +67,7 @@ export function CourseCalendar({ assignments, courseColor }: CourseCalendarProps
                     <span>{date.getDate()}</span>
                     {hasAssignment && (
                       <motion.span
-                        className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full"
+                        className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full"
                         style={{ backgroundColor: `hsl(var(--course-${courseColor}))` }}
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
@@ -95,7 +78,7 @@ export function CourseCalendar({ assignments, courseColor }: CourseCalendarProps
                 );
               },
             }}
-            className="w-full rounded-lg border-0 p-0"
+            className="rounded-lg border-0 p-0"
           />
         </div>
 
