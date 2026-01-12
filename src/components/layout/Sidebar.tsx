@@ -1,6 +1,9 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Calendar, BookOpen, Upload, Settings } from 'lucide-react';
+import { Home, Calendar, BookOpen, Upload, Settings, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: Home, path: '/' },
@@ -12,6 +15,23 @@ const navItems = [
 
 export function Sidebar() {
   const location = useLocation();
+  const { user, signOut } = useAuth();
+  const { toast } = useToast();
+
+  const handleSignOut = async () => {
+    const { error } = await signOut();
+    if (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Sign out failed',
+        description: error.message,
+      });
+    }
+  };
+
+  // Get user initial from email
+  const userInitial = user?.email?.charAt(0).toUpperCase() || 'U';
+  const userEmail = user?.email || 'User';
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
@@ -47,16 +67,24 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
+      {/* Footer with user info and logout */}
       <div className="p-4 border-t border-sidebar-border">
         <div className="flex items-center gap-3 px-3 py-2">
           <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-sm font-medium text-secondary-foreground">
-            A
+            {userInitial}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">Alex</p>
+            <p className="text-sm font-medium text-foreground truncate">{userEmail}</p>
             <p className="text-xs text-muted-foreground">Spring 2025</p>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleSignOut}
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
         </div>
       </div>
     </aside>
