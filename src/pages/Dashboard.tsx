@@ -10,8 +10,7 @@ export default function Dashboard() {
   const today = new Date();
   const greeting = getGreeting();
   
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [showContent, setShowContent] = useState(true);
+  const [phase, setPhase] = useState<'centered' | 'transitioning' | 'complete'>('complete');
   const [displayName, setDisplayName] = useState('Alex');
 
   useEffect(() => {
@@ -20,78 +19,88 @@ export default function Dashboard() {
     
     if (justSignedIn === 'true') {
       setDisplayName(storedName || 'Alex');
-      setIsAnimating(true);
-      setShowContent(false);
+      setPhase('centered');
       
-      // Clear the flag
+      // Clear the flags
       sessionStorage.removeItem('justSignedIn');
       sessionStorage.removeItem('displayName');
       
-      // After 1 second, move greeting to top and show content
-      const timer = setTimeout(() => {
-        setIsAnimating(false);
-        // Small delay before showing content for smooth transition
-        setTimeout(() => setShowContent(true), 300);
-      }, 1000);
+      // After 2 seconds, start transition
+      const timer1 = setTimeout(() => {
+        setPhase('transitioning');
+      }, 2000);
       
-      return () => clearTimeout(timer);
+      // Complete the transition
+      const timer2 = setTimeout(() => {
+        setPhase('complete');
+      }, 2600);
+      
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
     }
   }, []);
 
   return (
     <div className="space-y-8 relative">
-      {/* Header - animates from center to top */}
-      <motion.div
+      {/* Centered greeting overlay - shown initially after sign in */}
+      <AnimatePresence>
+        {phase === 'centered' && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <motion.div 
+              className="text-center"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ 
+                y: '-40vh',
+                scale: 0.7,
+                opacity: 0
+              }}
+              transition={{ 
+                duration: 0.6,
+                ease: [0.4, 0, 0.2, 1]
+              }}
+            >
+              <motion.p 
+                className="text-sm text-muted-foreground mb-2"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
+              >
+                {format(today, 'EEEE, MMMM d')}
+              </motion.p>
+              <h1 className="text-4xl md:text-5xl font-display font-light tracking-tight text-foreground">
+                {greeting}, <span className="font-medium">{displayName}</span>
+              </h1>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Normal header - appears after transition */}
+      <motion.div 
         className="text-center"
-        initial={isAnimating ? { 
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          x: '-50%',
-          y: '-50%',
-          zIndex: 50
-        } : false}
-        animate={isAnimating ? {
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          x: '-50%',
-          y: '-50%',
-          zIndex: 50
-        } : {
-          position: 'relative',
-          top: 'auto',
-          left: 'auto',
-          x: 0,
-          y: 0,
-          zIndex: 1
-        }}
-        transition={{
-          duration: 0.6,
-          ease: [0.4, 0, 0.2, 1]
-        }}
+        initial={phase !== 'complete' ? { opacity: 0 } : { opacity: 1 }}
+        animate={{ opacity: phase === 'complete' ? 1 : 0 }}
+        transition={{ duration: 0.4 }}
       >
-        <motion.p 
-          className="text-sm text-muted-foreground"
-          initial={isAnimating ? { opacity: 0 } : { opacity: 1 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: isAnimating ? 0.6 : 0 }}
-        >
+        <p className="text-sm text-muted-foreground">
           {format(today, 'EEEE, MMMM d')}
-        </motion.p>
-        <motion.h1 
-          className="text-3xl font-display font-light tracking-tight text-foreground mt-1"
-          initial={isAnimating ? { scale: 1.2 } : { scale: 1 }}
-          animate={{ scale: 1 }}
-          transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
-        >
+        </p>
+        <h1 className="text-3xl font-display font-light tracking-tight text-foreground mt-1">
           {greeting}, <span className="font-medium">{displayName}</span>
-        </motion.h1>
+        </h1>
       </motion.div>
 
       {/* Main Grid - appears after greeting animation */}
       <AnimatePresence>
-        {showContent && (
+        {phase === 'complete' && (
           <motion.div 
             className="grid gap-6 lg:grid-cols-5"
             initial={{ opacity: 0, y: 20 }}
