@@ -139,35 +139,41 @@ export default function AuthPage() {
         {/* Animated gradient background */}
         <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-background to-accent/20" />
         
-        {/* Floating animated orbs */}
+        {/* Floating blurry blob - foggy window effect */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <motion.div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full bg-primary/30 blur-3xl" animate={{
-          x: [0, 100, 0],
-          y: [0, -50, 0],
-          scale: [1, 1.2, 1]
-        }} transition={{
-          duration: 8,
-          repeat: Infinity,
-          ease: "easeInOut"
-        }} />
-          <motion.div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-accent/30 blur-3xl" animate={{
-          x: [0, -80, 0],
-          y: [0, 60, 0],
-          scale: [1.2, 1, 1.2]
-        }} transition={{
-          duration: 10,
-          repeat: Infinity,
-          ease: "easeInOut"
-        }} />
-          <motion.div className="absolute top-1/2 right-1/3 w-48 h-48 rounded-full bg-secondary/40 blur-3xl" animate={{
-          x: [0, 60, 0],
-          y: [0, -80, 0],
-          scale: [1, 1.3, 1]
-        }} transition={{
-          duration: 6,
-          repeat: Infinity,
-          ease: "easeInOut"
-        }} />
+          <motion.div 
+            className="absolute w-[600px] h-[600px] rounded-full bg-gradient-to-br from-primary/40 via-primary/20 to-accent/30"
+            style={{
+              filter: 'blur(120px)',
+            }}
+            animate={{
+              x: ['-10%', '60%', '30%', '-10%'],
+              y: ['-10%', '20%', '60%', '-10%'],
+              scale: [1, 1.1, 0.9, 1],
+            }}
+            transition={{
+              duration: 25,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
+          {/* Secondary smaller blob for depth */}
+          <motion.div 
+            className="absolute w-[400px] h-[400px] rounded-full bg-gradient-to-tr from-accent/30 via-secondary/20 to-primary/20"
+            style={{
+              filter: 'blur(100px)',
+            }}
+            animate={{
+              x: ['70%', '20%', '50%', '70%'],
+              y: ['60%', '30%', '-5%', '60%'],
+              scale: [0.9, 1.05, 1, 0.9],
+            }}
+            transition={{
+              duration: 20,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
         </div>
 
         {/* Subtle grid pattern overlay */}
