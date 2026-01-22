@@ -8,9 +8,10 @@ import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, Loader2, BookOpen } from 'lucide-react';
 import { z } from 'zod';
-import WelcomeTransition from '@/components/auth/WelcomeTransition';
+
 const emailSchema = z.string().email('Please enter a valid email address');
 const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
+
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -20,8 +21,6 @@ export default function AuthPage() {
     email?: string;
     password?: string;
   }>({});
-  const [showWelcome, setShowWelcome] = useState(false);
-  const [displayName, setDisplayName] = useState('');
   const {
     user,
     signInWithEmail,
@@ -39,19 +38,15 @@ export default function AuthPage() {
     };
   })?.from?.pathname || '/';
 
-  // Handle successful login with welcome animation
+  // Handle successful login - set flag and navigate
   useEffect(() => {
-    if (user && !showWelcome) {
+    if (user) {
       const name = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'there';
-      setDisplayName(name);
-      setShowWelcome(true);
+      sessionStorage.setItem('justSignedIn', 'true');
+      sessionStorage.setItem('displayName', name);
+      navigate(from, { replace: true });
     }
-  }, [user, showWelcome]);
-  const handleWelcomeComplete = () => {
-    navigate(from, {
-      replace: true
-    });
-  };
+  }, [user, navigate, from]);
   const validateForm = () => {
     const newErrors: {
       email?: string;
@@ -139,10 +134,6 @@ export default function AuthPage() {
     }
   };
   return <>
-      {/* Welcome transition overlay */}
-      <AnimatePresence>
-        {showWelcome && <WelcomeTransition displayName={displayName} onComplete={handleWelcomeComplete} />}
-      </AnimatePresence>
 
       <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
         {/* Animated gradient background */}
