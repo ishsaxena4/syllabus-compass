@@ -241,7 +241,7 @@ export default function AuthPage() {
               }} transition={{
                 duration: 0.3
               }} className="text-muted-foreground text-sm mt-2">
-                  {isLogin ? 'Welcome back! Ready to conquer your semester?' : 'Start organizing your academic life'}
+                  {isLogin ? 'Welcome back! Need help with assignments?' : 'Start organizing your academic life'}
                 </motion.p>
               </AnimatePresence>
             </motion.div>
