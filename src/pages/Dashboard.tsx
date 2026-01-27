@@ -6,22 +6,56 @@ import { TodaySection } from '@/components/dashboard/TodaySection';
 import { AttentionNeeded } from '@/components/dashboard/AttentionNeeded';
 import { mockCourses, mockAssignments, mockAttentionItems } from '@/data/mockData';
 
+// Helper to extract first name from email or full name
+function extractFirstName(nameOrEmail: string): string {
+  // If it looks like an email, get part before @
+  let name = nameOrEmail;
+  if (name.includes('@')) {
+    name = name.split('@')[0];
+  }
+  
+  // Remove numbers and special characters, split by common separators
+  name = name.replace(/[0-9]/g, '').replace(/[._-]/g, ' ').trim();
+  
+  // Get first word (first name)
+  const firstName = name.split(' ')[0];
+  
+  // Capitalize first letter
+  if (firstName.length > 0) {
+    return firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+  }
+  
+  return 'there';
+}
+
+// Check sessionStorage synchronously to determine initial phase
+function getInitialPhase(): 'centered' | 'transitioning' | 'complete' {
+  if (typeof window !== 'undefined') {
+    return sessionStorage.getItem('justSignedIn') === 'true' ? 'centered' : 'complete';
+  }
+  return 'complete';
+}
+
+function getInitialDisplayName(): string {
+  if (typeof window !== 'undefined') {
+    const storedName = sessionStorage.getItem('displayName');
+    return storedName ? extractFirstName(storedName) : 'there';
+  }
+  return 'there';
+}
+
 export default function Dashboard() {
   const today = new Date();
   const greeting = getGreeting();
   
-  const [phase, setPhase] = useState<'centered' | 'transitioning' | 'complete'>('complete');
-  const [displayName, setDisplayName] = useState('Alex');
+  // Initialize phase synchronously to prevent flash
+  const [phase, setPhase] = useState<'centered' | 'transitioning' | 'complete'>(getInitialPhase);
+  const [displayName, setDisplayName] = useState(getInitialDisplayName);
 
   useEffect(() => {
-    const justSignedIn = sessionStorage.getItem('justSignedIn');
-    const storedName = sessionStorage.getItem('displayName');
-    
-    if (justSignedIn === 'true') {
-      setDisplayName(storedName || 'Alex');
-      setPhase('centered');
-      
-      // Clear the flags
+    // Only run animation if we started in 'centered' phase
+    if (phase === 'centered') {
+      // Clear the flags immediately
       sessionStorage.removeItem('justSignedIn');
       sessionStorage.removeItem('displayName');
       
