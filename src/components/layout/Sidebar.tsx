@@ -4,6 +4,8 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: Home, path: '/' },
@@ -13,10 +15,34 @@ const navItems = [
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
 ];
 
+interface Profile {
+  first_name: string | null;
+  last_name: string | null;
+  organization: string | null;
+}
+
 export function Sidebar() {
   const location = useLocation();
   const { user, signOut } = useAuth();
   const { toast } = useToast();
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      const fetchProfile = async () => {
+        const { data } = await supabase
+          .from('profiles')
+          .select('first_name, last_name, organization')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        if (data) {
+          setProfile(data);
+        }
+      };
+      fetchProfile();
+    }
+  }, [user]);
 
   const handleSignOut = async () => {
     const { error } = await signOut();
@@ -29,9 +55,17 @@ export function Sidebar() {
     }
   };
 
-  // Get user initial from email
-  const userInitial = user?.email?.charAt(0).toUpperCase() || 'U';
-  const userEmail = user?.email || 'User';
+  // Get user initial from profile name or email
+  const userInitial = profile?.first_name?.charAt(0).toUpperCase() || 
+    user?.email?.charAt(0).toUpperCase() || 'U';
+  
+  // Display name: prefer profile name, fall back to email
+  const displayName = profile?.first_name 
+    ? `${profile.first_name}${profile.last_name ? ` ${profile.last_name}` : ''}`
+    : user?.email || 'User';
+  
+  // Organization from profile
+  const organization = profile?.organization || 'Academic Planning';
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
@@ -40,7 +74,9 @@ export function Sidebar() {
         <h1 className="text-xl font-semibold text-foreground tracking-tight">
           SyllabusOS
         </h1>
-        <p className="text-xs text-muted-foreground mt-0.5">Academic Planning</p>
+        <p className="text-xs text-muted-foreground mt-0.5 truncate" title={organization}>
+          {organization}
+        </p>
       </div>
 
       {/* Navigation */}
@@ -74,7 +110,7 @@ export function Sidebar() {
             {userInitial}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">{userEmail}</p>
+            <p className="text-sm font-medium text-foreground truncate">{displayName}</p>
             <p className="text-xs text-muted-foreground">Spring 2025</p>
           </div>
           <Button
