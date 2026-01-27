@@ -297,6 +297,36 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          created_at: string
+          first_name: string | null
+          id: string
+          last_name: string | null
+          organization: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          organization?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          organization?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       reminder_jobs: {
         Row: {
           assignment_id: string
