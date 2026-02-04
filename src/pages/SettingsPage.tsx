@@ -48,14 +48,37 @@ export default function SettingsPage() {
     if (!user) return;
     setSaving(true);
     
-    const { error } = await supabase
+    // Check if profile exists
+    const { data: existing } = await supabase
       .from('profiles')
-      .upsert({
-        user_id: user.id,
-        first_name: profile.first_name || null,
-        last_name: profile.last_name || null,
-        organization: profile.organization || null,
-      }, { onConflict: 'user_id' });
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    
+    let error;
+    if (existing) {
+      // Update existing profile
+      const result = await supabase
+        .from('profiles')
+        .update({
+          first_name: profile.first_name || null,
+          last_name: profile.last_name || null,
+          organization: profile.organization || null,
+        })
+        .eq('user_id', user.id);
+      error = result.error;
+    } else {
+      // Insert new profile
+      const result = await supabase
+        .from('profiles')
+        .insert({
+          user_id: user.id,
+          first_name: profile.first_name || null,
+          last_name: profile.last_name || null,
+          organization: profile.organization || null,
+        });
+      error = result.error;
+    }
     
     setSaving(false);
     
@@ -64,6 +87,10 @@ export default function SettingsPage() {
       console.error(error);
     } else {
       toast.success('Profile saved successfully');
+      // Update sessionStorage so dashboard greeting updates
+      if (profile.first_name) {
+        sessionStorage.setItem('user_first_name', profile.first_name);
+      }
     }
   };
 
