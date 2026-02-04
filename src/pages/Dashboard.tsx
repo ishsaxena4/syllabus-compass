@@ -5,6 +5,7 @@ import { UpcomingDeadlines } from '@/components/dashboard/UpcomingDeadlines';
 import { TodaySection } from '@/components/dashboard/TodaySection';
 import { AttentionNeeded } from '@/components/dashboard/AttentionNeeded';
 import { mockCourses, mockAssignments, mockAttentionItems } from '@/data/mockData';
+import { supabase } from '@/integrations/supabase/client';
 
 // Check sessionStorage synchronously to determine initial phase
 function getInitialPhase(): 'centered' | 'transitioning' | 'complete' {
@@ -17,10 +18,9 @@ function getInitialPhase(): 'centered' | 'transitioning' | 'complete' {
 function getInitialDisplayName(): string {
   if (typeof window !== 'undefined') {
     const storedName = sessionStorage.getItem('displayName');
-    // The name is now properly passed from AuthPage (first_name from profile)
-    return storedName || 'there';
+    return storedName || '';
   }
-  return 'there';
+  return '';
 }
 
 export default function Dashboard() {
@@ -30,6 +30,30 @@ export default function Dashboard() {
   // Initialize phase synchronously to prevent flash
   const [phase, setPhase] = useState<'centered' | 'transitioning' | 'complete'>(getInitialPhase);
   const [displayName, setDisplayName] = useState(getInitialDisplayName);
+
+  // Fetch profile if displayName not already set (returning users)
+  useEffect(() => {
+    async function fetchProfile() {
+      if (displayName) return; // Already have a name from sessionStorage
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('first_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (profile?.first_name) {
+        setDisplayName(profile.first_name);
+      } else {
+        setDisplayName('there');
+      }
+    }
+    
+    fetchProfile();
+  }, [displayName]);
 
   useEffect(() => {
     // Only run animation if we started in 'centered' phase
