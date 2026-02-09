@@ -95,7 +95,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-2xl mx-auto">
       {/* Header */}
       <div className="animate-fade-up">
         <h1 className="text-2xl font-semibold text-foreground">Settings</h1>
