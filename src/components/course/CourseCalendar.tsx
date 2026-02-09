@@ -59,23 +59,17 @@ export function CourseCalendar({ assignments, courseColor }: CourseCalendarProps
                 const isSelected = selectedDate ? isSameDay(date, selectedDate) : false;
 
                 return (
-                  <motion.div
-                    className="relative w-full h-full flex items-center justify-center"
-                    whileTap={{ scale: 0.95 }}
-                    animate={{ scale: isSelected ? 1.05 : 1 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                  >
-                    <span>{date.getDate()}</span>
-                    {hasAssignment && (
-                      <motion.span
-                        className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full"
-                        style={{ backgroundColor: `hsl(var(--course-${courseColor}))` }}
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                      />
-                    )}
-                  </motion.div>
+                  <div className="flex flex-col items-center justify-center w-full h-full">
+                    <span className="leading-none text-[13px]">{date.getDate()}</span>
+                    <span
+                      className="mt-[2px] w-[5px] h-[5px] rounded-full"
+                      style={{
+                        backgroundColor: hasAssignment
+                          ? `hsl(var(--course-${courseColor}))`
+                          : 'transparent',
+                      }}
+                    />
+                  </div>
                 );
               },
             }}
