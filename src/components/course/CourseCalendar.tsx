@@ -49,7 +49,8 @@ export function CourseCalendar({ assignments, courseColor }: CourseCalendarProps
             modifiers={modifiers}
             modifiersStyles={modifiersStyles}
             classNames={{
-              day_selected: "bg-primary text-primary-foreground rounded-md",
+              cell: "h-9 w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20",
+              day_selected: "bg-primary text-primary-foreground rounded-md hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
               day_today: "bg-accent text-accent-foreground rounded-md",
             }}
             components={{
@@ -67,7 +68,7 @@ export function CourseCalendar({ assignments, courseColor }: CourseCalendarProps
                     <span>{date.getDate()}</span>
                     {hasAssignment && (
                       <motion.span
-                        className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full"
+                        className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full"
                         style={{ backgroundColor: `hsl(var(--course-${courseColor}))` }}
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
