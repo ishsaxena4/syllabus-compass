@@ -23,7 +23,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       </div>
       
       <main className={`${isMobile ? 'pb-20' : 'ml-64'} min-h-screen`}>
-        <div className="p-6 md:p-8 pt-14 max-w-6xl mx-auto">
+        <div className="p-4 md:p-8 pt-14 max-w-[1400px] mx-auto">
           {children}
         </div>
       </main>
