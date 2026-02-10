@@ -7,6 +7,7 @@ import { mockCourses, mockAssignments } from '@/data/mockData';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { AssignmentTypeIcon } from '@/components/shared/AssignmentTypeIcon';
 import { CourseCalendar } from '@/components/course/CourseCalendar';
+import { AddAssignmentCard } from '@/components/shared/AddAssignmentCard';
 
 export default function CourseDetail() {
   const { id } = useParams();
@@ -151,7 +152,7 @@ export default function CourseDetail() {
           </div>
         </TabsContent>
 
-        <TabsContent value="assignments" className="mt-6">
+        <TabsContent value="assignments" className="mt-6 space-y-4">
           <div className="card-elevated p-5">
             <div className="space-y-3">
               {assignments.map((assignment) => (
@@ -176,6 +177,7 @@ export default function CourseDetail() {
               ))}
             </div>
           </div>
+          <AddAssignmentCard fixedCourseId={course.id} />
         </TabsContent>
 
         <TabsContent value="calendar" className="mt-6">

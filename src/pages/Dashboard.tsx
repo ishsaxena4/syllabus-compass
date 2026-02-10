@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { UpcomingDeadlines } from '@/components/dashboard/UpcomingDeadlines';
 import { TodaySection } from '@/components/dashboard/TodaySection';
 import { AttentionNeeded } from '@/components/dashboard/AttentionNeeded';
+import { AddAssignmentCard } from '@/components/shared/AddAssignmentCard';
 import { mockCourses, mockAssignments, mockAttentionItems } from '@/data/mockData';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -170,6 +171,13 @@ export default function Dashboard() {
                 transition={{ duration: 0.4, delay: 0.2 }}
               >
                 <AttentionNeeded items={mockAttentionItems} courses={mockCourses} />
+              </motion.div>
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.25 }}
+              >
+                <AddAssignmentCard courses={mockCourses.map(c => ({ id: c.id, name: c.name, section: c.section }))} />
               </motion.div>
             </div>
           </motion.div>
