@@ -51,23 +51,6 @@ const ASSIGNMENT_TYPES = [
   { value: 'other', label: 'Other' },
 ] as const;
 
-const TIME_OPTIONS = [
-  { value: '08:00', label: '8:00 AM' },
-  { value: '09:00', label: '9:00 AM' },
-  { value: '10:00', label: '10:00 AM' },
-  { value: '11:00', label: '11:00 AM' },
-  { value: '11:59', label: '11:59 AM' },
-  { value: '12:00', label: '12:00 PM' },
-  { value: '13:00', label: '1:00 PM' },
-  { value: '14:00', label: '2:00 PM' },
-  { value: '15:00', label: '3:00 PM' },
-  { value: '16:00', label: '4:00 PM' },
-  { value: '17:00', label: '5:00 PM' },
-  { value: '18:00', label: '6:00 PM' },
-  { value: '20:00', label: '8:00 PM' },
-  { value: '21:00', label: '9:00 PM' },
-  { value: '23:59', label: '11:59 PM' },
-] as const;
 
 export function AddAssignmentCard({ courses, fixedCourseId, onAssignmentAdded }: AddAssignmentCardProps) {
   const [open, setOpen] = useState(false);
@@ -239,18 +222,12 @@ export function AddAssignmentCard({ courses, fixedCourseId, onAssignmentAdded }:
 
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Due Time</Label>
-              <Select value={dueTime} onValueChange={setDueTime}>
-                <SelectTrigger className="h-10">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIME_OPTIONS.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                type="time"
+                value={dueTime}
+                onChange={(e) => setDueTime(e.target.value)}
+                className="h-10"
+              />
             </div>
           </div>
 
