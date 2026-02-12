@@ -2,8 +2,8 @@ import { ChevronRight, Mail, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { mockCourses, mockAssignments } from '@/data/mockData';
 import { format, isFuture } from 'date-fns';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { AddCourseDialog } from '@/components/shared/AddCourseDialog';
 
 export default function CoursesPage() {
   const navigate = useNavigate();
@@ -25,9 +25,7 @@ export default function CoursesPage() {
             {mockCourses.length} active courses this semester
           </p>
         </div>
-        <Button variant="outline">
-          Add Course
-        </Button>
+        <AddCourseDialog />
       </div>
 
       {/* Course Grid */}
