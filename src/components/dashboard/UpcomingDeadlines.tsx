@@ -1,5 +1,6 @@
 import { format, isToday, isTomorrow } from 'date-fns';
 import { ChevronRight, Check } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Assignment, Course } from '@/types';
 import { CoursePill } from '@/components/shared/CoursePill';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -18,6 +19,7 @@ function formatDueDate(date: Date): string {
 }
 
 export function UpcomingDeadlines({ assignments, courses }: UpcomingDeadlinesProps) {
+  const navigate = useNavigate();
   const getCourse = (courseId: string) => courses.find((c) => c.id === courseId);
 
   return (
@@ -70,7 +72,7 @@ export function UpcomingDeadlines({ assignments, courses }: UpcomingDeadlinesPro
         })}
       </div>
 
-      <Button variant="ghost" className="w-full mt-4 text-muted-foreground hover:text-foreground">
+      <Button variant="ghost" className="w-full mt-4 text-muted-foreground hover:text-foreground" onClick={() => navigate('/calendar')}>
         View all assignments
         <ChevronRight className="w-4 h-4 ml-1" />
       </Button>
