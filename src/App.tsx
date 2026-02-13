@@ -12,6 +12,7 @@ import CourseDetail from "./pages/CourseDetail";
 import UploadPage from "./pages/UploadPage";
 import SettingsPage from "./pages/SettingsPage";
 import AuthPage from "./pages/AuthPage";
+import SylliPage from "./pages/SylliPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -63,6 +64,16 @@ const App = () => (
               <ProtectedRoute>
                 <AppLayout>
                   <CourseDetail />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/sylli"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <SylliPage />
                 </AppLayout>
               </ProtectedRoute>
             }

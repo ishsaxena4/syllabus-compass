@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Calendar, BookOpen, Upload, Settings, LogOut } from 'lucide-react';
+import { Home, Calendar, BookOpen, Upload, Settings, LogOut, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: Home, path: '/' },
   { id: 'calendar', label: 'Calendar', icon: Calendar, path: '/calendar' },
   { id: 'courses', label: 'Courses', icon: BookOpen, path: '/courses' },
+  { id: 'sylli', label: 'Sylli', icon: MessageSquare, path: '/sylli' },
   { id: 'upload', label: 'Upload', icon: Upload, path: '/upload' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
 ];

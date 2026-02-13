@@ -1,12 +1,12 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Calendar, BookOpen, Upload, Settings } from 'lucide-react';
+import { Home, Calendar, BookOpen, Upload, Settings, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { id: 'dashboard', label: 'Home', icon: Home, path: '/' },
   { id: 'calendar', label: 'Calendar', icon: Calendar, path: '/calendar' },
   { id: 'courses', label: 'Courses', icon: BookOpen, path: '/courses' },
-  { id: 'upload', label: 'Upload', icon: Upload, path: '/upload' },
+  { id: 'sylli', label: 'Sylli', icon: MessageSquare, path: '/sylli' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
 ];
 
