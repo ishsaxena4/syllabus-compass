@@ -1,1 +1,10 @@
 project_id = "olkriduceflppgxmeghr"
+
+[functions.chat]
+verify_jwt = false
+
+[functions.chat-confirm]
+verify_jwt = false
+
+[functions.chat-cancel]
+verify_jwt = false
