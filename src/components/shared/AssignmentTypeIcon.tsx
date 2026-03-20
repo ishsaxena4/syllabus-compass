@@ -1,7 +1,7 @@
 import { FileText, HelpCircle, GraduationCap, FolderOpen, BookOpen, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type AssignmentType = 'homework' | 'quiz' | 'exam' | 'project' | 'reading' | 'other';
+type AssignmentType = 'homework' | 'quiz' | 'exam' | 'project' | 'reading' | 'lab' | 'other';
 
 interface AssignmentTypeIconProps {
   type: AssignmentType;
@@ -14,6 +14,7 @@ const typeConfig: Record<AssignmentType, { icon: typeof FileText; label: string 
   exam: { icon: GraduationCap, label: 'Exam' },
   project: { icon: FolderOpen, label: 'Project' },
   reading: { icon: BookOpen, label: 'Reading' },
+  lab: { icon: BookOpen, label: 'Lab' },
   other: { icon: MoreHorizontal, label: 'Other' },
 };
 

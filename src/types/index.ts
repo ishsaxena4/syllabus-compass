@@ -19,7 +19,7 @@ export interface Assignment {
   id: string;
   title: string;
   courseId: string;
-  type: 'homework' | 'quiz' | 'exam' | 'project' | 'reading' | 'other';
+  type: 'homework' | 'quiz' | 'exam' | 'project' | 'reading' | 'lab' | 'other';
   dueDate: Date;
   status: 'upcoming' | 'due-soon' | 'completed';
   notes?: string;
