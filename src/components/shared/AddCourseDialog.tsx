@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +38,7 @@ interface AddCourseDialogProps {
 }
 
 export function AddCourseDialog({ onCourseAdded }: AddCourseDialogProps) {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -80,6 +82,7 @@ export function AddCourseDialog({ onCourseAdded }: AddCourseDialogProps) {
       if (error) throw error;
 
       toast.success('Course added');
+      await queryClient.invalidateQueries({ queryKey: ['courses'] });
       resetForm();
       setOpen(false);
       onCourseAdded?.();

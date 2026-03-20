@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,7 @@ const ASSIGNMENT_TYPES = [
 
 
 export function AddAssignmentCard({ courses, fixedCourseId, onAssignmentAdded }: AddAssignmentCardProps) {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -112,6 +114,7 @@ export function AddAssignmentCard({ courses, fixedCourseId, onAssignmentAdded }:
       if (error) throw error;
 
       toast.success('Assignment added');
+      await queryClient.invalidateQueries({ queryKey: ['assignments'] });
       resetForm();
       setOpen(false);
       onAssignmentAdded?.();
