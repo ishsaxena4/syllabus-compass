@@ -60,6 +60,50 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Syllabus Upload Pipeline
+
+### Architecture
+
+1. **Upload Page** (`/upload`) — select a course, drag-drop a PDF (or use the demo/seed tool)
+2. **PDF text extraction** — client-side via `pdfjs-dist`
+3. **Edge Function** `process-syllabus` — deterministic parser that creates `extracted_items` rows
+4. **Review UI** (`/upload?review=<id>`) — accept / edit / discard each extracted item
+5. Accepted items flow into `assignments`, `courses.professor_email`, or `course_meetings`
+
+### Required Supabase setup
+
+| Step | Details |
+|------|---------|
+| Storage bucket | Create a **public or private** bucket called `syllabi` in Supabase → Storage. Add a policy allowing authenticated users to INSERT into their own path (`(bucket_id = 'syllabi') AND (auth.uid()::text = (storage.foldername(name))[1])`). |
+| Edge Function deploy | `supabase functions deploy process-syllabus` |
+| Environment variables | The frontend needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env`. The edge function uses `SUPABASE_URL` and `SUPABASE_ANON_KEY` (auto-set by Supabase runtime). |
+
+### Running locally
+
+```sh
+# Install dependencies
+npm install
+
+# Start Vite dev server
+npm run dev
+
+# (Optional) Serve edge functions locally
+supabase start
+supabase functions serve process-syllabus --no-verify-jwt
+```
+
+### Testing the upload pipeline manually
+
+1. Sign in (or sign up) at `/auth`
+2. Go to `/courses` and create a course (e.g. "CS 301")
+3. Go to `/upload`, select the course from the dropdown
+4. **Option A — PDF upload:** drag-drop a syllabus PDF into the upload zone
+5. **Option B — Demo seed:** click "Show demo / seed tool", review the sample text, click "Process Demo Text"
+6. The pipeline runs: Uploading → Extracting → Processing → Ready
+7. You are redirected to the Review UI showing extracted items grouped by kind
+8. Accept, edit, or discard items. High-confidence items are visually marked "Auto-confirm suggested"
+9. Verify: accepted assignments appear in `assignments` table; professor email updates `courses.professor_email`; meeting times appear in `course_meetings`
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
