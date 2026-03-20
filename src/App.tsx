@@ -5,11 +5,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { PipelineProvider } from "@/lib/pipeline";
 import Index from "./pages/Index";
 import CalendarPage from "./pages/CalendarPage";
 import CoursesPage from "./pages/CoursesPage";
 import CourseDetail from "./pages/CourseDetail";
 import UploadPage from "./pages/UploadPage";
+import OnboardingPage from "./pages/OnboardingPage";
 import SettingsPage from "./pages/SettingsPage";
 import AuthPage from "./pages/AuthPage";
 import SylliPage from "./pages/SylliPage";
@@ -23,6 +25,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <PipelineProvider>
         <Routes>
           {/* Public route */}
           <Route path="/auth" element={<AuthPage />} />
@@ -89,6 +92,14 @@ const App = () => (
             }
           />
           <Route
+            path="/onboarding"
+            element={
+              <ProtectedRoute>
+                <OnboardingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/settings"
             element={
               <ProtectedRoute>
@@ -100,6 +111,7 @@ const App = () => (
           />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </PipelineProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
