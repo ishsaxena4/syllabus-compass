@@ -1,20 +1,30 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Clock, MapPin, ChevronRight, Check, FileText, CalendarDays } from 'lucide-react';
+import { ArrowLeft, Mail, Clock, MapPin, ChevronRight, Check, FileText } from 'lucide-react';
 import { format, isFuture } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { mockCourses, mockAssignments } from '@/data/mockData';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { AssignmentTypeIcon } from '@/components/shared/AssignmentTypeIcon';
 import { CourseCalendar } from '@/components/course/CourseCalendar';
 import { AddAssignmentCard } from '@/components/shared/AddAssignmentCard';
+import { useLiveAssignments, useLiveCourses } from '@/hooks/useAcademicData';
 
 export default function CourseDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  
-  const course = mockCourses.find((c) => c.id === id);
-  const assignments = mockAssignments.filter((a) => a.courseId === id);
+  const { data: courses = [], isLoading: coursesLoading } = useLiveCourses();
+  const {
+    data: allAssignments = [],
+    isLoading: assignmentsLoading,
+    refetch: refetchAssignments,
+  } = useLiveAssignments();
+
+  const course = courses.find((c) => c.id === id);
+  const assignments = allAssignments.filter((a) => a.courseId === id);
+
+  if (coursesLoading || assignmentsLoading) {
+    return <div className="py-12 text-sm text-muted-foreground">Loading course...</div>;
+  }
 
   if (!course) {
     return (
@@ -177,7 +187,10 @@ export default function CourseDetail() {
               ))}
             </div>
           </div>
-          <AddAssignmentCard fixedCourseId={course.id} />
+          <AddAssignmentCard
+            fixedCourseId={course.id}
+            onAssignmentAdded={() => void refetchAssignments()}
+          />
         </TabsContent>
 
         <TabsContent value="calendar" className="mt-6">
@@ -193,7 +206,7 @@ export default function CourseDetail() {
             <p className="text-sm text-muted-foreground mt-2 max-w-sm">
               Upload a syllabus to automatically extract assignments, due dates, and course policies.
             </p>
-            <Button className="mt-6">
+            <Button className="mt-6" onClick={() => navigate('/upload')}>
               Upload Syllabus
             </Button>
           </div>

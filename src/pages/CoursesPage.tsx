@@ -1,19 +1,25 @@
 import { ChevronRight, Mail, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { mockCourses, mockAssignments } from '@/data/mockData';
 import { format, isFuture } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { AddCourseDialog } from '@/components/shared/AddCourseDialog';
+import { useLiveAssignments, useLiveCourses } from '@/hooks/useAcademicData';
 
 export default function CoursesPage() {
   const navigate = useNavigate();
+  const { data: courses = [], isLoading: coursesLoading, refetch: refetchCourses } = useLiveCourses();
+  const { data: assignments = [], isLoading: assignmentsLoading } = useLiveAssignments();
 
   const getNextDeadline = (courseId: string) => {
-    const upcoming = mockAssignments
+    const upcoming = assignments
       .filter((a) => a.courseId === courseId && isFuture(a.dueDate))
       .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())[0];
     return upcoming;
   };
+
+  if (coursesLoading || assignmentsLoading) {
+    return <div className="py-12 text-sm text-muted-foreground">Loading courses...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -22,15 +28,15 @@ export default function CoursesPage() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Courses</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {mockCourses.length} active courses this semester
+            {courses.length} active courses this semester
           </p>
         </div>
-        <AddCourseDialog />
+        <AddCourseDialog onCourseAdded={() => void refetchCourses()} />
       </div>
 
       {/* Course Grid */}
       <div className="grid gap-4 md:grid-cols-2 stagger-children">
-        {mockCourses.map((course) => {
+        {courses.map((course) => {
           const nextDeadline = getNextDeadline(course.id);
 
           return (

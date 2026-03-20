@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { UpcomingDeadlines } from '@/components/dashboard/UpcomingDeadlines';
 import { TodaySection } from '@/components/dashboard/TodaySection';
 import { AttentionNeeded } from '@/components/dashboard/AttentionNeeded';
 import { AddAssignmentCard } from '@/components/shared/AddAssignmentCard';
-import { mockCourses, mockAssignments, mockAttentionItems } from '@/data/mockData';
 import { supabase } from '@/integrations/supabase/client';
+import { useAttentionItems, useLiveAssignments, useLiveCourses, useNeedsOnboarding } from '@/hooks/useAcademicData';
 
 // Check sessionStorage synchronously to determine initial phase
 function getInitialPhase(): 'centered' | 'transitioning' | 'complete' {
@@ -25,12 +26,24 @@ function getInitialDisplayName(): string {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const today = new Date();
   const greeting = getGreeting();
+  const { data: courses = [], isLoading: coursesLoading } = useLiveCourses();
+  const { data: assignments = [], isLoading: assignmentsLoading } = useLiveAssignments();
+  const { data: attentionItems = [] } = useAttentionItems();
+  const { data: needsOnboarding, isLoading: onboardingLoading } = useNeedsOnboarding();
   
   // Initialize phase synchronously to prevent flash
   const [phase, setPhase] = useState<'centered' | 'transitioning' | 'complete'>(getInitialPhase);
   const [displayName, setDisplayName] = useState(getInitialDisplayName);
+
+  useEffect(() => {
+    if (onboardingLoading) return;
+    if (needsOnboarding) {
+      navigate('/onboarding', { replace: true });
+    }
+  }, [needsOnboarding, onboardingLoading, navigate]);
 
   // Fetch profile if displayName not already set (returning users)
   useEffect(() => {
@@ -79,6 +92,14 @@ export default function Dashboard() {
       };
     }
   }, []);
+
+  if (onboardingLoading || coursesLoading || assignmentsLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
+        Loading your workspace...
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 relative">
@@ -152,7 +173,7 @@ export default function Dashboard() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.1 }}
               >
-                <UpcomingDeadlines assignments={mockAssignments} courses={mockCourses} />
+                <UpcomingDeadlines assignments={assignments} courses={courses} />
               </motion.div>
             </div>
 
@@ -163,21 +184,21 @@ export default function Dashboard() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.15 }}
               >
-                <TodaySection assignments={mockAssignments} courses={mockCourses} />
+                <TodaySection assignments={assignments} courses={courses} />
               </motion.div>
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.2 }}
               >
-                <AttentionNeeded items={mockAttentionItems} courses={mockCourses} />
+                <AttentionNeeded items={attentionItems} courses={courses} />
               </motion.div>
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.25 }}
               >
-                <AddAssignmentCard courses={mockCourses.map(c => ({ id: c.id, name: c.name, section: c.section }))} />
+                <AddAssignmentCard courses={courses.map(c => ({ id: c.id, name: c.name, section: c.section }))} />
               </motion.div>
             </div>
           </motion.div>

@@ -3,8 +3,8 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSam
 import { ChevronLeft, ChevronRight, List, Grid3X3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CoursePill } from '@/components/shared/CoursePill';
-import { mockAssignments, mockCourses } from '@/data/mockData';
 import { cn } from '@/lib/utils';
+import { useLiveAssignments, useLiveCourses } from '@/hooks/useAcademicData';
 
 type ViewMode = 'month' | 'agenda';
 
@@ -12,18 +12,24 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const { data: assignments = [], isLoading: assignmentsLoading } = useLiveAssignments();
+  const { data: courses = [], isLoading: coursesLoading } = useLiveCourses();
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  const getCourse = (courseId: string) => mockCourses.find((c) => c.id === courseId);
+  const getCourse = (courseId: string) => courses.find((c) => c.id === courseId);
   
   const getAssignmentsForDay = (date: Date) => 
-    mockAssignments.filter((a) => isSameDay(a.dueDate, date));
+    assignments.filter((a) => isSameDay(a.dueDate, date));
 
   const firstDayOfWeek = monthStart.getDay();
   const paddingDays = Array(firstDayOfWeek).fill(null);
+
+  if (assignmentsLoading || coursesLoading) {
+    return <div className="py-12 text-sm text-muted-foreground">Loading calendar...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -170,7 +176,7 @@ export default function CalendarPage() {
             Upcoming Assignments
           </h2>
           <div className="space-y-3">
-            {mockAssignments
+            {assignments
               .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
               .map((assignment) => {
                 const course = getCourse(assignment.courseId);
