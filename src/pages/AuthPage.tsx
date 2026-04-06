@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -471,18 +471,26 @@ export default function AuthPage() {
 
             {/* Remember me checkbox - only show during login */}
             {isLogin && (
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="rememberMe"
-                  checked={rememberMe}
-                  onCheckedChange={(checked) => setRememberMe(checked === true)}
-                />
-                <Label 
-                  htmlFor="rememberMe" 
-                  className="text-sm font-normal text-muted-foreground cursor-pointer"
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="rememberMe"
+                    checked={rememberMe}
+                    onCheckedChange={(checked) => setRememberMe(checked === true)}
+                  />
+                  <Label
+                    htmlFor="rememberMe"
+                    className="text-sm font-normal text-muted-foreground cursor-pointer"
+                  >
+                    Remember me
+                  </Label>
+                </div>
+                <Link
+                  to={`/auth/forgot-password${email ? `?email=${encodeURIComponent(email)}` : ''}`}
+                  className="text-xs font-medium text-primary hover:text-primary/80 hover:underline underline-offset-4"
                 >
-                  Remember me
-                </Label>
+                  Forgot password?
+                </Link>
               </div>
             )}
 

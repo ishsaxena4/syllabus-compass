@@ -1,20 +1,47 @@
-import { ChevronRight, Mail, Clock } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronRight, Mail, Clock, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, isFuture } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { AddCourseDialog } from '@/components/shared/AddCourseDialog';
-import { useLiveAssignments, useLiveCourses } from '@/hooks/useAcademicData';
+import { useDeleteCourse, useLiveAssignments, useLiveCourses } from '@/hooks/useAcademicData';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
 
 export default function CoursesPage() {
   const navigate = useNavigate();
   const { data: courses = [], isLoading: coursesLoading, refetch: refetchCourses } = useLiveCourses();
   const { data: assignments = [], isLoading: assignmentsLoading } = useLiveAssignments();
+  const { mutateAsync: deleteCourse, isPending: isDeletingCourse } = useDeleteCourse();
+  const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
 
   const getNextDeadline = (courseId: string) => {
     const upcoming = assignments
       .filter((a) => a.courseId === courseId && isFuture(a.dueDate))
       .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())[0];
     return upcoming;
+  };
+
+  const handleDeleteCourse = async (courseId: string) => {
+    setDeletingCourseId(courseId);
+    try {
+      await deleteCourse(courseId);
+      toast.success('Course deleted');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete course');
+    } finally {
+      setDeletingCourseId((prev) => (prev === courseId ? null : prev));
+    }
   };
 
   if (coursesLoading || assignmentsLoading) {
@@ -64,7 +91,45 @@ export default function CoursesPage() {
                         </p>
                       )}
                     </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    <div className="flex items-center gap-1 shrink-0">
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={(event) => event.stopPropagation()}
+                            className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            disabled={isDeletingCourse}
+                            title="Delete course"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent onClick={(event) => event.stopPropagation()}>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete {course.name}?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will permanently remove the course and all related assignments, meetings, uploads,
+                              and extracted items.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void handleDeleteCourse(course.id);
+                              }}
+                              disabled={isDeletingCourse && deletingCourseId === course.id}
+                            >
+                              {isDeletingCourse && deletingCourseId === course.id ? 'Deleting...' : 'Delete course'}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                      <ChevronRight className="w-5 h-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
                   </div>
 
                   <div className="mt-4 space-y-2">

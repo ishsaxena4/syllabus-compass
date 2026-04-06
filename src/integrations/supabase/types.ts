@@ -661,7 +661,10 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      delete_course_cascade: {
+        Args: { p_course_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       assignment_status: "upcoming" | "completed"

@@ -5,6 +5,7 @@ import { GraduationCap, Sparkles, Plus, Trash2, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { useNeedsOnboarding } from "@/hooks/useAcademicData";
@@ -49,6 +50,22 @@ export default function OnboardingPage() {
   }, [isLoading, needsOnboarding, navigate]);
 
   const semesterLabel = useMemo(() => `${term} ${year}`.trim(), [term, year]);
+  const hasValidTerm = useMemo(() => TERM_OPTIONS.includes(term), [term]);
+  const hasValidYear = useMemo(() => /^\d{4}$/.test(year.trim()), [year]);
+  const hasAtLeastOneCourseName = useMemo(
+    () => courses.some((course) => course.name.trim().length > 0),
+    [courses],
+  );
+  const completedSetupTaskCount = useMemo(
+    () =>
+      [hasValidTerm, hasValidYear, hasAtLeastOneCourseName, step === 3].filter(Boolean)
+        .length,
+    [hasAtLeastOneCourseName, hasValidTerm, hasValidYear, step],
+  );
+  const progressPercent = useMemo(
+    () => Math.round((completedSetupTaskCount / 4) * 100),
+    [completedSetupTaskCount],
+  );
 
   function updateCourse(id: string, patch: Partial<DraftCourse>) {
     setCourses((prev) => prev.map((course) => (course.id === id ? { ...course, ...patch } : course)));
@@ -99,8 +116,8 @@ export default function OnboardingPage() {
 
       setStep(3);
       toast.success("Semester and courses saved.");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to finish onboarding.");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to finish onboarding.");
     } finally {
       setSubmitting(false);
     }
@@ -114,6 +131,10 @@ export default function OnboardingPage() {
 
   return (
     <div className="max-w-3xl mx-auto py-8 space-y-8">
+      <div className="fixed top-0 left-0 right-0 z-40 pointer-events-none">
+        <Progress value={progressPercent} className="h-1 rounded-none bg-secondary/30 [&>div]:bg-primary/60" />
+      </div>
+
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}

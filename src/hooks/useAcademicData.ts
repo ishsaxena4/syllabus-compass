@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { differenceInHours } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -165,6 +165,33 @@ export function useNeedsOnboarding() {
 
       if (error) throw error;
       return (count || 0) === 0;
+    },
+  });
+}
+
+export function useDeleteCourse() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (courseId: string) => {
+      if (!user) {
+        throw new Error("You must be signed in to delete a course.");
+      }
+
+      const { error } = await supabase.rpc("delete_course_cascade", {
+        p_course_id: courseId,
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["courses", user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["assignments", user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["attention-items", user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["needs-onboarding", user?.id] }),
+      ]);
     },
   });
 }

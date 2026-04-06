@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Clock, MapPin, ChevronRight, Check, FileText } from 'lucide-react';
+import { ArrowLeft, Mail, Clock, MapPin, ChevronRight, Check, FileText, Trash2 } from 'lucide-react';
 import { format, isFuture } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -7,7 +8,19 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { AssignmentTypeIcon } from '@/components/shared/AssignmentTypeIcon';
 import { CourseCalendar } from '@/components/course/CourseCalendar';
 import { AddAssignmentCard } from '@/components/shared/AddAssignmentCard';
-import { useLiveAssignments, useLiveCourses } from '@/hooks/useAcademicData';
+import { useDeleteCourse, useLiveAssignments, useLiveCourses } from '@/hooks/useAcademicData';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
 
 export default function CourseDetail() {
   const { id } = useParams();
@@ -18,6 +31,8 @@ export default function CourseDetail() {
     isLoading: assignmentsLoading,
     refetch: refetchAssignments,
   } = useLiveAssignments();
+  const { mutateAsync: deleteCourse, isPending: isDeletingCourse } = useDeleteCourse();
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const course = courses.find((c) => c.id === id);
   const assignments = allAssignments.filter((a) => a.courseId === id);
@@ -42,6 +57,19 @@ export default function CourseDetail() {
     .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
     .slice(0, 3);
 
+  const handleDeleteCourse = async () => {
+    if (!course) return;
+
+    try {
+      await deleteCourse(course.id);
+      toast.success('Course deleted');
+      setIsDeleteDialogOpen(false);
+      navigate('/courses', { replace: true });
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete course');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Back Button */}
@@ -61,7 +89,39 @@ export default function CourseDetail() {
             style={{ backgroundColor: `hsl(var(--course-${course.color}))` }}
           />
           <div className="flex-1">
-            <h1 className="text-2xl font-semibold text-foreground">{course.name}</h1>
+            <div className="flex items-start justify-between gap-4">
+              <h1 className="text-2xl font-semibold text-foreground">{course.name}</h1>
+              <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Delete course
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete {course.name}?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently remove the course and all related assignments, meetings, uploads, and
+                      extracted items.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isDeletingCourse}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        void handleDeleteCourse();
+                      }}
+                      disabled={isDeletingCourse}
+                    >
+                      {isDeletingCourse ? 'Deleting...' : 'Delete course'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
             {course.section && (
               <p className="text-muted-foreground mt-1">{course.section}</p>
             )}
