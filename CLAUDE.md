@@ -16,7 +16,7 @@ See README.md for what the app is, the architecture, and setup.
 
 ## Next tasks
 - Done 2026-10-13: legacy anon/service_role keys disabled; `OPENAI_API_KEY` and `LOVABLE_API_KEY` secrets removed.
-- Done 2026-10-15: Attention Needed fixed (migration `20261015000000`: `risk_reason` codes, saved resolve/dismiss via `assignments.attention_dismissed_at`); unused UTC views `v_today`/`v_due_soon` dropped. Pending reviews are reachable from the Upload page and course Overview.
+- Done 2026-10-13: Attention Needed fixed (migration `20261015000000`: `risk_reason` codes, saved resolve/dismiss via `assignments.attention_dismissed_at`); unused UTC views `v_today`/`v_due_soon` dropped. Pending reviews are reachable from the Upload page and course Overview.
 1. Remaining:
    - Deploy the frontend to Vercel.
    - Configure Supabase auth redirect URLs.
