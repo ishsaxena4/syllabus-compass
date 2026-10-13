@@ -6,6 +6,7 @@ import { CoursePill } from '@/components/shared/CoursePill';
 import { cn } from '@/lib/utils';
 import { useLiveAssignments, useLiveCourses } from '@/hooks/useAcademicData';
 import { byDueDate, isOpen } from '@/lib/assignments';
+import { DayDetailSheet } from '@/components/calendar/DayDetailSheet';
 
 type ViewMode = 'month' | 'agenda';
 
@@ -21,6 +22,12 @@ export default function CalendarPage() {
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
   const getCourse = (courseId: string) => courses.find((c) => c.id === courseId);
+
+  // Stepping to another day from the panel keeps the month grid in sync behind it.
+  function changeSelectedDate(date: Date | null) {
+    setSelectedDate(date);
+    if (date && !isSameMonth(date, currentDate)) setCurrentDate(date);
+  }
   
   const getAssignmentsForDay = (date: Date) => 
     assignments.filter((a) => a.dueDate && isSameDay(a.dueDate, date));
@@ -187,6 +194,7 @@ export default function CalendarPage() {
                 return (
                   <div
                     key={assignment.id}
+                    onClick={() => changeSelectedDate(assignment.dueDate)}
                     className="flex items-center gap-4 p-3 rounded-lg hover:bg-secondary/50 transition-colors cursor-pointer"
                   >
                     <div
@@ -213,6 +221,13 @@ export default function CalendarPage() {
           </div>
         </div>
       )}
+
+      <DayDetailSheet
+        date={selectedDate}
+        assignments={assignments}
+        courses={courses}
+        onDateChange={changeSelectedDate}
+      />
     </div>
   );
 }
