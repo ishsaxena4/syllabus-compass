@@ -28,7 +28,7 @@ export function ExamTimeline({ assignments }: ExamTimelineProps) {
   const remaining = exams.filter((a) => !isPast(a)).length;
 
   return (
-    <div className="card-elevated px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+    <div className="card-elevated px-4 pt-3.5 pb-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
       {/* Label sits beside the strip on wider screens to keep the card one row tall. */}
       <div className="flex items-center justify-between sm:block sm:w-24 sm:shrink-0">
         <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
@@ -40,7 +40,7 @@ export function ExamTimeline({ assignments }: ExamTimelineProps) {
         </p>
       </div>
 
-      <ol className="flex flex-1 min-w-0 overflow-x-auto">
+      <ol className="flex flex-1 min-w-0 overflow-x-auto pt-1.5 pb-0.5">
         {exams.map((exam, index) => {
           const past = isPast(exam);
           const isNext = exam.id === nextId;
