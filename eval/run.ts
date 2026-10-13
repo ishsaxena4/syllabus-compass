@@ -159,7 +159,7 @@ for (const r of results) {
     ...s.missed.map(i => `  missed      ${i.due_date ?? 'undated'}  ${i.title}`),
     ...s.falsePositives.map(i => `  extra       ${i.due_date ?? 'undated'}  ${i.title} (${i.type})`),
     ...s.timeWrong.map(m => `  wrong time  ${m.expected.due_date}  ${m.expected.title}: got ${m.actual.due_time ?? 'none'}, expected ${m.expected.due_time}`),
-    ...s.matches.filter(m => m.actual.type !== m.expected.type).map(m => `  wrong type  ${m.expected.due_date}  ${m.expected.title}: got ${m.actual.type}, expected ${m.expected.type}`),
+    ...s.matches.filter(m => m.actual.type !== m.expected.type && !(m.expected.alt_types ?? []).includes(m.actual.type)).map(m => `  wrong type  ${m.expected.due_date}  ${m.expected.title}: got ${m.actual.type}, expected ${m.expected.type}`),
   ]
   if (issues.length) lines.push(`${r.config} / ${r.key.course_key}`, ...issues)
 }

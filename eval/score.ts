@@ -7,6 +7,8 @@ export interface ExpectedItem {
   due_date: string | null
   due_time: string | null
   importance: 'required' | 'optional'
+  // Other types that are an equally fair reading of the source.
+  alt_types?: string[]
 }
 
 export interface ExpectedMeeting {
@@ -64,10 +66,14 @@ function titleSimilarity(a: string, b: string): number {
   return shared / Math.min(ta.size, tb.size)
 }
 
+function typeMatches(expected: ExpectedItem, type: string): boolean {
+  return expected.type === type || (expected.alt_types ?? []).includes(type)
+}
+
 // Higher is a better pairing; null means the two can't be the same item.
 function pairScore(expected: ExpectedItem, actual: ExtractedItem): number | null {
   const sim = titleSimilarity(expected.title, actual.title)
-  const sameType = expected.type === actual.type ? 1 : 0
+  const sameType = typeMatches(expected, actual.type) ? 1 : 0
   if (expected.due_date !== null) {
     if (actual.due_date !== expected.due_date) return null
     return 2 + sameType + sim
@@ -118,7 +124,7 @@ export function scoreCase(key: AnswerKey, extraction: Extraction): CaseScore {
     falsePositives: extraction.items.filter((_, a) => !usedActual.has(a)),
     missed: required.filter(i => !matches.some(m => m.expected === i)),
     matches,
-    typeCorrect: matches.filter(m => m.actual.type === m.expected.type).length,
+    typeCorrect: matches.filter(m => typeMatches(m.expected, m.actual.type)).length,
     timeChecked: timed.length,
     timeCorrect: timed.length - timeWrong.length,
     timeWrong,

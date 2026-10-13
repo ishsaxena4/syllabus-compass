@@ -36,6 +36,7 @@ For exams and other timed events, due_time is the start and end_time is the end.
 ## Everything else
 - meetings: recurring class sessions and office hours, with days, times, and location. Leave fields null when not stated. Do not list a meeting for an asynchronous course.
 - contacts: instructors and TAs with email addresses as written.
+- rules: only recurring deadline patterns whose individual dates are not listed (e.g. "quizzes due Fridays", "homework due Tuesdays at midnight"). General policies (grading weights, late penalties, exam materials, AI use) are not rules; leave them out.
 - source_quote: a short verbatim snippet from the document that supports the item.
 - confidence: high when the date and time are stated plainly; medium when you combined information across places (calendar date plus policy time); low when you had to interpret something unclear.
 - warnings: anything the student should know about the extraction as a whole, such as a schedule that lives elsewhere (a website or LMS) and was not provided.`
