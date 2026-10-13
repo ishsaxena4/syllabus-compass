@@ -270,3 +270,40 @@ export function useResolveAttentionItem() {
       ]),
   });
 }
+
+export interface PendingReview {
+  courseId: string;
+  count: number;
+  // Uploads that still have pending items; the review screen takes these as ?review=.
+  uploadIds: string[];
+}
+
+// Extracted items the student has not accepted or discarded yet, per course, so they
+// can get back to a review they left part-way through.
+export function usePendingReviews() {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ["pending-reviews", user?.id],
+    enabled: !!user,
+    queryFn: async (): Promise<PendingReview[]> => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from("extracted_items")
+        .select("course_id, syllabus_upload_id")
+        .eq("user_id", user.id)
+        .eq("status", "pending");
+      if (error) throw error;
+
+      const byCourse = new Map<string, PendingReview>();
+      for (const row of data || []) {
+        if (!row.course_id) continue;
+        const entry = byCourse.get(row.course_id) ?? { courseId: row.course_id, count: 0, uploadIds: [] };
+        entry.count += 1;
+        if (!entry.uploadIds.includes(row.syllabus_upload_id)) entry.uploadIds.push(row.syllabus_upload_id);
+        byCourse.set(row.course_id, entry);
+      }
+      return [...byCourse.values()];
+    },
+  });
+}
