@@ -49,8 +49,11 @@ export interface Assignment {
 
 export interface AttentionItem {
   id: string;
-  type: 'ambiguous-date' | 'missing-date' | 'conflict' | 'low-confidence';
+  // Mirrors v_risky_items.risk_reason.
+  type: 'missing-date' | 'low-confidence' | 'unconfirmed';
   title: string;
   courseId?: string;
   description: string;
+  dueDate: Date | null;
+  assignmentType: AssignmentType;
 }

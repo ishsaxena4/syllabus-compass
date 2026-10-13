@@ -41,6 +41,7 @@ export type Database = {
     Tables: {
       assignments: {
         Row: {
+          attention_dismissed_at: string | null
           confidence: Database["public"]["Enums"]["extraction_confidence"]
           confirmed: boolean
           course_id: string
@@ -58,6 +59,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          attention_dismissed_at?: string | null
           confidence?: Database["public"]["Enums"]["extraction_confidence"]
           confirmed?: boolean
           course_id: string
@@ -75,6 +77,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          attention_dismissed_at?: string | null
           confidence?: Database["public"]["Enums"]["extraction_confidence"]
           confirmed?: boolean
           course_id?: string
@@ -645,9 +648,11 @@ export type Database = {
           entity_id: string | null
           entity_type: string | null
           label: string | null
+          notes: string | null
           last_updated_at: string | null
           risk_reason: string | null
           source_snippet: string | null
+          type: Database["public"]["Enums"]["assignment_type"] | null
           user_id: string | null
         }
         Relationships: [
