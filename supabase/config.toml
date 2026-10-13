@@ -1,4 +1,4 @@
-project_id = "olkriduceflppgxmeghr"
+project_id = "syllabus-compass"
 
 [functions.chat]
 verify_jwt = false
