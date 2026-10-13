@@ -12,13 +12,12 @@ See README.md for what the app is, the architecture, and setup.
 - `process-syllabus` (code on this branch) runs the Claude extractor: `index.ts` takes `syllabus_upload_ids` + `student_notes` + `timezone`, runs as the calling user with the publishable key (`SUPABASE_PUBLISHABLE_KEYS`), writes `extracted_items`, and stores course info/rules/warnings in `syllabus_uploads.extraction` (migration `20261014000000`). Row mapping is in `rows.ts`. Re-running a batch replaces its pending items.
 - Frontend: the upload page stages files plus an optional notes box, uploads them all, then calls the function once. The review screen shows time basis, ambiguity, source quote, course rules/warnings, and an undated section. pdfjs/mammoth are gone from the client.
 - Instructor contacts become `professor_email` items (TAs are not imported). Office-hours meetings, when accepted, fill `courses.office_hours` instead of `course_meetings`.
+- Deployed and tested end to end on 2026-10-13 with MA 261 (syllabus + schedule): all homeworks, quizzes, midterms, recitation, office hours and email extracted; review pre-selects everything except the undated final and the lecture with no end time.
 
-## Next task: deploy and test end to end
-1. The user runs `supabase secrets set ANTHROPIC_API_KEY=...` so the key never enters the chat.
-2. `supabase db push` (adds `syllabus_uploads.extraction`), then `supabase functions deploy process-syllabus`, then `npm run supabase:types`.
-3. Test in the running app with a real syllabus from `Benchmark/Syllabi/` (try a two-file course such as MA 261 + `Schedule261.pages.pdf`).
-4. After it works, the user disables the legacy anon/service_role keys (one was exposed in an earlier session).
-5. Later:
+## Next tasks
+1. The user disables the legacy anon/service_role keys in the Supabase dashboard (one was exposed in an earlier session). Nothing in the app uses them.
+2. Optionally remove the now-unused `OPENAI_API_KEY` and `LOVABLE_API_KEY` function secrets.
+3. Later:
    - Deploy the frontend to Vercel.
    - Configure Supabase auth redirect URLs.
    - Fix `v_today`, which uses UTC `CURRENT_DATE`.
