@@ -16,7 +16,8 @@
     "supabase:stop": "supabase stop",
     "supabase:status": "supabase status",
     "supabase:functions:serve": "supabase functions serve process-syllabus --no-verify-jwt",
-    "supabase:functions:deploy": "supabase functions deploy process-syllabus"
+    "supabase:functions:deploy": "supabase functions deploy process-syllabus",
+    "supabase:types": "supabase gen types typescript --linked > src/integrations/supabase/types.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

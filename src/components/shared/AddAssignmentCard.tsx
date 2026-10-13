@@ -27,6 +27,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { ASSIGNMENT_TYPES } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -41,16 +42,6 @@ interface AddAssignmentCardProps {
   fixedCourseId?: string;
   onAssignmentAdded?: () => void;
 }
-
-const ASSIGNMENT_TYPES = [
-  { value: 'homework', label: 'Homework' },
-  { value: 'quiz', label: 'Quiz' },
-  { value: 'exam', label: 'Exam' },
-  { value: 'project', label: 'Project' },
-  { value: 'reading', label: 'Reading' },
-  { value: 'lab', label: 'Lab' },
-  { value: 'other', label: 'Other' },
-] as const;
 
 
 export function AddAssignmentCard({ courses, fixedCourseId, onAssignmentAdded }: AddAssignmentCardProps) {

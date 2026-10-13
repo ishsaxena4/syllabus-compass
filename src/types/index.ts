@@ -15,11 +15,29 @@ export interface Course {
   };
 }
 
+// Mirrors the `assignment_type` enum in Postgres. Order is the order shown in pickers.
+export const ASSIGNMENT_TYPES = [
+  { value: 'homework', label: 'Homework' },
+  { value: 'quiz', label: 'Quiz' },
+  { value: 'exam', label: 'Exam' },
+  { value: 'project', label: 'Project' },
+  { value: 'reading', label: 'Reading' },
+  { value: 'lab', label: 'Lab' },
+  { value: 'discussion', label: 'Discussion' },
+  { value: 'other', label: 'Other' },
+] as const;
+
+export type AssignmentType = (typeof ASSIGNMENT_TYPES)[number]['value'];
+
+export function isAssignmentType(value: unknown): value is AssignmentType {
+  return ASSIGNMENT_TYPES.some(t => t.value === value);
+}
+
 export interface Assignment {
   id: string;
   title: string;
   courseId: string;
-  type: 'homework' | 'quiz' | 'exam' | 'project' | 'reading' | 'lab' | 'other';
+  type: AssignmentType;
   dueDate: Date;
   status: 'upcoming' | 'due-soon' | 'completed';
   notes?: string;

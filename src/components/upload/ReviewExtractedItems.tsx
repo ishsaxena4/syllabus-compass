@@ -15,13 +15,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { ASSIGNMENT_TYPES } from '@/types';
 import { usePipeline, type ExtractedItem } from '@/lib/pipeline';
 import { getFriendlySupabaseErrorMessage } from '@/lib/runtimeConfig';
 import type { ParserStats, ProcessDiagnostics } from '@/lib/pipeline/types';
-
-const ASSIGNMENT_TYPES = [
-  'homework', 'quiz', 'exam', 'project', 'reading', 'lab', 'other',
-] as const;
 
 const WEEKDAYS = [
   { value: 'mon', label: 'Mon' },
@@ -320,7 +317,7 @@ export function ReviewExtractedItems({ syllabusUploadId }: Props) {
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {ASSIGNMENT_TYPES.map(t => (
-                          <SelectItem key={t} value={t}>{t}</SelectItem>
+                          <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { extractTextFromPdf } from '@/lib/pdfTextExtract';
 import { extractTextFromDocx } from '@/lib/docxTextExtract';
+import { isAssignmentType } from '@/types';
 import type {
   BatchProcessResult,
   SyllabusPipelinePort,
@@ -260,12 +261,11 @@ export const realAdapter: SyllabusPipelinePort = {
     const p = item.payload as Record<string, any>;
 
     if (item.item_kind === 'assignment' && item.course_id) {
-      const validTypes = ['homework', 'quiz', 'exam', 'project', 'reading', 'lab', 'other'];
       const { error } = await supabase.from('assignments').insert({
         user_id: userId,
         course_id: item.course_id,
         title: p.title || item.title || 'Untitled',
-        type: validTypes.includes(p.type) ? p.type : 'other',
+        type: isAssignmentType(p.type) ? p.type : 'other',
         due_at: p.due_at || null,
         status: 'upcoming',
         confirmed: true,

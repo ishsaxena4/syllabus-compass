@@ -86,6 +86,6 @@ export interface SyllabusPipelinePort {
 
   updateItem(
     itemId: string,
-    updates: { payload: Record<string, unknown>; title: string | null },
+    updates: { payload: Json; title: string | null },
   ): Promise<void>;
 }
