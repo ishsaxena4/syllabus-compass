@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
-  Upload, CheckCircle, AlertCircle, Loader2, FileText, X,
+  Upload, CheckCircle, AlertCircle, Loader2, FileText, X, ChevronRight, ListChecks,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { usePendingReviews } from '@/hooks/useAcademicData';
 import { toast } from 'sonner';
 import { usePipeline, type UploadStep } from '@/lib/pipeline';
 import { ReviewExtractedItems } from '@/components/upload/ReviewExtractedItems';
@@ -43,6 +44,7 @@ export default function UploadPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const pipeline = usePipeline();
+  const { data: pendingReviews = [] } = usePendingReviews();
 
   const reviewId = searchParams.get('review');
   const reviewIds = reviewId
@@ -172,6 +174,32 @@ export default function UploadPage() {
           every deadline, meeting time, and instructor email for you to review.
         </p>
       </div>
+
+      {/* Reviews left part-way through */}
+      {pendingReviews.length > 0 && !isProcessing && (
+        <div className="card-elevated divide-y divide-border animate-fade-up">
+          {pendingReviews.map(p => {
+            const course = courses.find(c => c.id === p.courseId);
+            return (
+              <button
+                key={p.courseId}
+                type="button"
+                onClick={() => navigate(`/upload?review=${p.uploadIds.join(',')}`)}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-secondary/50 transition-colors first:rounded-t-xl last:rounded-b-xl"
+              >
+                <ListChecks className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium text-foreground truncate">
+                  {course ? course.name : 'A course'}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {p.count} item{p.count === 1 ? '' : 's'} still to review
+                </span>
+                <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto shrink-0" />
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Course Selector */}
       <div className="animate-fade-up" style={{ animationDelay: '50ms' }}>

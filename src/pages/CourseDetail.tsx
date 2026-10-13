@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Clock, MapPin, ChevronRight, ChevronDown, FileText, Trash2 } from 'lucide-react';
+import { ArrowLeft, Mail, Clock, MapPin, ChevronRight, ChevronDown, FileText, Trash2, ListChecks } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -13,7 +13,7 @@ import { CompleteToggle } from '@/components/shared/CompleteToggle';
 import { byDueDate, isOpen } from '@/lib/assignments';
 import { formatClockRange } from '@/lib/time';
 import type { Assignment } from '@/types';
-import { useDeleteCourse, useLiveAssignments, useLiveCourses } from '@/hooks/useAcademicData';
+import { useDeleteCourse, useLiveAssignments, useLiveCourses, usePendingReviews } from '@/hooks/useAcademicData';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +40,8 @@ export default function CourseDetail() {
   const { mutateAsync: deleteCourse, isPending: isDeletingCourse } = useDeleteCourse();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [showClosed, setShowClosed] = useState(false);
+  const { data: pendingReviews = [] } = usePendingReviews();
+  const pendingReview = pendingReviews.find((p) => p.courseId === id);
 
   const course = courses.find((c) => c.id === id);
   const assignments = allAssignments.filter((a) => a.courseId === id);
@@ -212,6 +214,20 @@ export default function CourseDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6">
+          {pendingReview && (
+            <button
+              type="button"
+              onClick={() => navigate(`/upload?review=${pendingReview.uploadIds.join(',')}`)}
+              className="w-full card-elevated flex items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-secondary/50 transition-colors"
+            >
+              <ListChecks className="w-4 h-4 text-muted-foreground" />
+              <span className="text-foreground">
+                {pendingReview.count} extracted item{pendingReview.count === 1 ? '' : 's'} still to review
+              </span>
+              <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto" />
+            </button>
+          )}
+
           <ExamTimeline assignments={assignments} />
 
           {/* Upcoming Deadlines */}

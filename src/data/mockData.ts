@@ -132,10 +132,12 @@ export const mockAssignments: Assignment[] = [
 export const mockAttentionItems: AttentionItem[] = [
   {
     id: '1',
-    type: 'ambiguous-date',
+    type: 'unconfirmed',
     title: 'Final Project Due Date',
     courseId: '3',
     description: 'Syllabus mentions "last week of classes" - please confirm exact date',
+    dueDate: null,
+    assignmentType: 'project',
   },
   {
     id: '2',
@@ -143,5 +145,7 @@ export const mockAttentionItems: AttentionItem[] = [
     title: 'Lab Schedule Change',
     courseId: '4',
     description: 'Possible schedule change detected - verify with syllabus',
+    dueDate: null,
+    assignmentType: 'lab',
   },
 ];

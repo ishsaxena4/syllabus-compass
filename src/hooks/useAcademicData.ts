@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { differenceInHours } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import type { AttentionItem, Assignment, AssignmentStatus, Course, CourseColor } from "@/types";
+import { isAssignmentType, type AttentionItem, type Assignment, type AssignmentStatus, type Course, type CourseColor } from "@/types";
 
 const COURSE_COLORS: CourseColor[] = ["sage", "coral", "sky", "amber", "lavender", "rose"];
 
@@ -117,6 +117,12 @@ export function useLiveAssignments() {
   });
 }
 
+const ATTENTION_DEFAULT_TEXT: Record<AttentionItem["type"], string> = {
+  "missing-date": "The syllabus doesn't give a date yet. Add it once it's announced.",
+  "low-confidence": "The date or time may be off. Check it against the syllabus.",
+  unconfirmed: "Confirm the date and time are right.",
+};
+
 export function useAttentionItems() {
   const { user } = useAuth();
 
@@ -134,13 +140,21 @@ export function useAttentionItems() {
 
       if (error) throw error;
 
-      return (data || []).map((row) => ({
-        id: row.entity_id || crypto.randomUUID(),
-        type: row.risk_reason === "low-confidence" ? "low-confidence" : "ambiguous-date",
-        title: row.label || "Needs review",
-        courseId: row.course_id || undefined,
-        description: row.risk_reason || "Please review this extracted item.",
-      }));
+      return (data || []).map((row) => {
+        const type: AttentionItem["type"] =
+          row.risk_reason === "missing-date" || row.risk_reason === "low-confidence"
+            ? row.risk_reason
+            : "unconfirmed";
+        return {
+          id: row.entity_id || crypto.randomUUID(),
+          type,
+          title: row.label || "Untitled",
+          courseId: row.course_id || undefined,
+          description: row.notes || ATTENTION_DEFAULT_TEXT[type],
+          dueDate: row.due_at ? new Date(row.due_at) : null,
+          assignmentType: isAssignmentType(row.type) ? row.type : "other",
+        };
+      });
     },
   });
 }
@@ -229,5 +243,67 @@ export function useSetAssignmentsCompleted() {
       if (context?.previous) queryClient.setQueryData(key, context.previous);
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
+  });
+}
+
+// Resolves an attention item: saving sets the date (if given) and confirms the
+// assignment; dismissing hides it from the list without changing it.
+export function useResolveAttentionItem() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (
+      params: { id: string; action: "save"; dueAt: string | null } | { id: string; action: "dismiss" },
+    ) => {
+      const update =
+        params.action === "dismiss"
+          ? { attention_dismissed_at: new Date().toISOString() }
+          : { confirmed: true, ...(params.dueAt ? { due_at: params.dueAt } : {}) };
+      const { error } = await supabase.from("assignments").update(update).eq("id", params.id);
+      if (error) throw error;
+    },
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["attention-items", user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["assignments", user?.id] }),
+      ]),
+  });
+}
+
+export interface PendingReview {
+  courseId: string;
+  count: number;
+  // Uploads that still have pending items; the review screen takes these as ?review=.
+  uploadIds: string[];
+}
+
+// Extracted items the student has not accepted or discarded yet, per course, so they
+// can get back to a review they left part-way through.
+export function usePendingReviews() {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ["pending-reviews", user?.id],
+    enabled: !!user,
+    queryFn: async (): Promise<PendingReview[]> => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from("extracted_items")
+        .select("course_id, syllabus_upload_id")
+        .eq("user_id", user.id)
+        .eq("status", "pending");
+      if (error) throw error;
+
+      const byCourse = new Map<string, PendingReview>();
+      for (const row of data || []) {
+        if (!row.course_id) continue;
+        const entry = byCourse.get(row.course_id) ?? { courseId: row.course_id, count: 0, uploadIds: [] };
+        entry.count += 1;
+        if (!entry.uploadIds.includes(row.syllabus_upload_id)) entry.uploadIds.push(row.syllabus_upload_id);
+        byCourse.set(row.course_id, entry);
+      }
+      return [...byCourse.values()];
+    },
   });
 }

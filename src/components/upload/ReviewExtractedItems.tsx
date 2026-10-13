@@ -208,6 +208,7 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
         queryClient.invalidateQueries({ queryKey: ['assignments'] }),
         queryClient.invalidateQueries({ queryKey: ['courses'] }),
         queryClient.invalidateQueries({ queryKey: ['attention-items'] }),
+        queryClient.invalidateQueries({ queryKey: ['pending-reviews'] }),
       ]);
       toast.success(
         toAccept.length === 1
@@ -236,7 +237,10 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
       await pipeline.discardItem(id);
       setItems(prev => prev.filter(i => i.id !== id));
       toggleSelected([id], false);
-      await queryClient.invalidateQueries({ queryKey: ['attention-items'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['attention-items'] }),
+        queryClient.invalidateQueries({ queryKey: ['pending-reviews'] }),
+      ]);
       toast.info('Item discarded');
     } catch {
       toast.error('Failed to discard item');
