@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, Check, X, Pencil, Loader2, Sparkles,
+  ArrowLeft, Check, X, Pencil, Loader2,
   Mail, Clock, BookOpen, CheckCircle2, AlertTriangle, CalendarX, Repeat, GraduationCap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ASSIGNMENT_TYPES } from '@/types';
-import { usePipeline, type ExtractedItem, type ExtractionSummary } from '@/lib/pipeline';
+import {
+  attentionReason, canAcceptItem, usePipeline, type ExtractedItem, type ExtractionSummary,
+} from '@/lib/pipeline';
 import { getFriendlySupabaseErrorMessage } from '@/lib/runtimeConfig';
 
 const WEEKDAYS = [
@@ -107,7 +109,8 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Record<string, any>>({});
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
-  const [acceptingAll, setAcceptingAll] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [acceptingSelected, setAcceptingSelected] = useState(false);
 
   const idsKey = syllabusUploadIds.join(',');
   useEffect(() => {
@@ -123,6 +126,8 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
       ]);
       setItems(data);
       setSummary(extraction);
+      // Pre-select everything that can go in as-is; flagged items wait for a look.
+      setSelected(new Set(data.filter(i => attentionReason(i) === null).map(i => i.id)));
     } catch (error) {
       toast.error(getFriendlySupabaseErrorMessage(error, 'Failed to load extracted items'));
       setItems([]);
@@ -135,14 +140,19 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
   const undated = assignments.filter(i => !(i.payload as any)?.due_at);
   const emails = items.filter(i => i.item_kind === 'professor_email');
   const meetings = items.filter(i => i.item_kind === 'meeting_time');
-  // Only items that can be accepted as-is: dated assignments and complete meetings.
-  const autoAcceptable = items.filter(i => {
-    if (i.confidence !== 'high') return false;
-    const p = i.payload as any;
-    if (i.item_kind === 'assignment') return Boolean(p?.due_at) && !p?.time_inferred;
-    return true;
-  });
-  const reviewCount = items.filter(i => i.confidence !== 'high').length;
+  const flaggedCount = items.filter(i => attentionReason(i) !== null).length;
+  const selectedItems = items.filter(i => selected.has(i.id));
+
+  function toggleSelected(ids: string[], on: boolean) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
 
   function startEdit(item: ExtractedItem) {
     setEditingId(item.id);
@@ -158,9 +168,9 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
     const newTitle = editData.title || editData.email || item.title;
     try {
       await pipeline.updateItem(item.id, { payload: editData, title: newTitle });
-      setItems(prev =>
-        prev.map(i => (i.id === item.id ? { ...i, payload: editData, title: newTitle } : i)),
-      );
+      const updated = { ...item, payload: editData, title: newTitle };
+      setItems(prev => prev.map(i => (i.id === item.id ? updated : i)));
+      if (attentionReason(updated) === null) toggleSelected([item.id], true);
       await queryClient.invalidateQueries({ queryKey: ['attention-items'] });
       setEditingId(null);
       setEditData({});
@@ -170,48 +180,52 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
     }
   }
 
-  async function accept(item: ExtractedItem) {
-    if (!user) return;
-    setBusyIds(prev => new Set(prev).add(item.id));
+  async function acceptMany(toAccept: ExtractedItem[]) {
+    if (!user || toAccept.length === 0) return;
+    const ids = toAccept.map(i => i.id);
+    setBusyIds(prev => new Set([...prev, ...ids]));
 
     try {
-      await pipeline.acceptItem(item, user.id);
-      setItems(prev => prev.filter(i => i.id !== item.id));
+      await pipeline.acceptItems(toAccept, user.id);
+      setItems(prev => prev.filter(i => !ids.includes(i.id)));
+      toggleSelected(ids, false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['assignments'] }),
         queryClient.invalidateQueries({ queryKey: ['courses'] }),
         queryClient.invalidateQueries({ queryKey: ['attention-items'] }),
       ]);
-      toast.success(`Accepted: ${item.title || item.item_kind}`);
+      toast.success(
+        toAccept.length === 1
+          ? `Accepted: ${toAccept[0].title || toAccept[0].item_kind}`
+          : `Accepted ${toAccept.length} items`,
+      );
     } catch (err: any) {
-      toast.error(err.message || 'Failed to accept item');
+      toast.error(err.message || 'Failed to accept items');
     } finally {
       setBusyIds(prev => {
         const next = new Set(prev);
-        next.delete(item.id);
+        for (const id of ids) next.delete(id);
         return next;
       });
     }
+  }
+
+  async function acceptSelected() {
+    setAcceptingSelected(true);
+    await acceptMany(selectedItems);
+    setAcceptingSelected(false);
   }
 
   async function discard(id: string) {
     try {
       await pipeline.discardItem(id);
       setItems(prev => prev.filter(i => i.id !== id));
+      toggleSelected([id], false);
       await queryClient.invalidateQueries({ queryKey: ['attention-items'] });
       toast.info('Item discarded');
     } catch {
       toast.error('Failed to discard item');
     }
-  }
-
-  async function acceptAllHigh() {
-    if (autoAcceptable.length === 0) return;
-    setAcceptingAll(true);
-    for (const item of autoAcceptable) {
-      await accept(item);
-    }
-    setAcceptingAll(false);
   }
 
   function renderItemCard(item: ExtractedItem) {
@@ -220,14 +234,31 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
     const p = item.payload as any;
     const basis = item.item_kind === 'assignment' ? timeBasisLabel(p) : null;
     const meetingKind = item.item_kind === 'meeting_time' ? MEETING_KIND_LABELS[p?.kind] : null;
+    const reason = attentionReason(item);
+    const acceptable = canAcceptItem(item);
 
     return (
-      <div key={item.id} className="card-elevated p-4 transition-all">
+      <div
+        key={item.id}
+        className={cn('card-elevated p-4 transition-all', selected.has(item.id) && 'ring-1 ring-primary/40')}
+      >
         <div className="flex items-start justify-between gap-3">
+          <Checkbox
+            className="mt-0.5"
+            checked={selected.has(item.id)}
+            disabled={!acceptable || isBusy}
+            onCheckedChange={checked => toggleSelected([item.id], checked === true)}
+            aria-label={`Select ${item.title}`}
+          />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h4 className="text-sm font-medium truncate max-w-[280px]">{item.title}</h4>
               <ConfidenceBadge confidence={item.confidence} />
+              {reason && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                  {reason}
+                </span>
+              )}
             </div>
 
             {item.item_kind === 'assignment' && (
@@ -277,7 +308,7 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
 
           {!isEditing && (
             <div className="flex gap-1 shrink-0">
-              <Button size="sm" onClick={() => accept(item)} disabled={isBusy || acceptingAll}>
+              <Button size="sm" onClick={() => acceptMany([item])} disabled={!acceptable || isBusy || acceptingSelected}>
                 {isBusy
                   ? <Loader2 className="w-3 h-3 animate-spin" />
                   : <Check className="w-3 h-3 mr-1" />}
@@ -419,12 +450,24 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
     description?: string,
   ) {
     if (list.length === 0) return null;
+    const selectable = list.filter(canAcceptItem).map(i => i.id);
+    const allSelected = selectable.length > 0 && selectable.every(id => selected.has(id));
     return (
       <div className="space-y-3 animate-fade-up">
         <div>
           <div className="flex items-center gap-2">
             {icon}
             <h3 className="text-sm font-medium text-foreground">{title} ({list.length})</h3>
+            {selectable.length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto h-7 text-xs"
+                onClick={() => toggleSelected(selectable, !allSelected)}
+              >
+                {allSelected ? 'Deselect all' : 'Select all'}
+              </Button>
+            )}
           </div>
           {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
         </div>
@@ -529,20 +572,15 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
         <h1 className="text-2xl font-semibold text-foreground">Review Extracted Items</h1>
         <p className="text-sm text-muted-foreground mt-2">
           {items.length} item{items.length !== 1 ? 's' : ''} found
-          {reviewCount > 0 && <> &middot; {reviewCount} need a closer look</>}
+          {flaggedCount > 0 && <> &middot; {flaggedCount} flagged for a closer look</>}
         </p>
       </div>
 
       {renderSummary()}
 
-      {autoAcceptable.length > 0 && (
-        <Button onClick={acceptAllHigh} disabled={acceptingAll} className="w-full" variant="outline">
-          {acceptingAll
-            ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            : <Sparkles className="w-4 h-4 mr-2" />}
-          Accept all high-confidence items with dates and times ({autoAcceptable.length})
-        </Button>
-      )}
+      <p className="text-xs text-muted-foreground text-center -mt-3">
+        Everything not flagged is already selected. Check the flagged items, then accept the selection.
+      </p>
 
       {renderSection('Assignments', <BookOpen className="w-4 h-4 text-muted-foreground" />, dated)}
       {renderSection(
@@ -553,6 +591,21 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
       )}
       {renderSection('Meeting times', <Clock className="w-4 h-4 text-muted-foreground" />, meetings)}
       {renderSection('Instructor email', <Mail className="w-4 h-4 text-muted-foreground" />, emails)}
+
+      {selected.size > 0 && (
+        <div className="sticky bottom-4 z-10 card-elevated p-3 flex items-center gap-3 shadow-lg border border-border">
+          <span className="text-sm text-foreground">{selectedItems.length} selected</span>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} disabled={acceptingSelected}>
+            Clear
+          </Button>
+          <Button size="sm" className="ml-auto" onClick={acceptSelected} disabled={acceptingSelected}>
+            {acceptingSelected
+              ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              : <Check className="w-4 h-4 mr-2" />}
+            Accept {selectedItems.length} selected
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

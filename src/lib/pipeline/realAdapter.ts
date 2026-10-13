@@ -1,6 +1,7 @@
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { isAssignmentType } from '@/types';
+import { canAcceptItem } from './review';
 import type {
   BatchProcessResult,
   ExtractionSummary,
@@ -129,57 +130,70 @@ export const realAdapter: SyllabusPipelinePort = {
     return (data?.[0]?.extraction ?? null) as unknown as ExtractionSummary | null;
   },
 
-  async acceptItem(item, userId) {
-    const p = item.payload as Record<string, any>;
-    if (!item.course_id) throw new Error('This item is not linked to a course');
+  async acceptItems(items, userId) {
+    const blocked = items.find(i => !canAcceptItem(i));
+    if (blocked) {
+      throw new Error(
+        blocked.course_id
+          ? `Add the days and start and end times to "${blocked.title}" before accepting it`
+          : `"${blocked.title}" is not linked to a course`,
+      );
+    }
+    const payloadOf = (i: ExtractedItem) => i.payload as Record<string, any>;
+    const isOfficeHours = (i: ExtractedItem) => i.item_kind === 'meeting_time' && payloadOf(i).kind === 'office_hours';
 
-    if (item.item_kind === 'assignment') {
-      const { error } = await supabase.from('assignments').insert({
+    // Assignments and meetings go in one insert each; course fields are per course.
+    const assignments = items.filter(i => i.item_kind === 'assignment').map(i => {
+      const p = payloadOf(i);
+      return {
         user_id: userId,
-        course_id: item.course_id,
-        title: p.title || item.title || 'Untitled',
+        course_id: i.course_id!,
+        title: p.title || i.title || 'Untitled',
         type: isAssignmentType(p.type) ? p.type : 'other',
         due_at: p.due_at || null,
         notes: p.ambiguity || null,
-        status: 'upcoming',
+        status: 'upcoming' as const,
         confirmed: true,
-        confidence: item.confidence,
-        source_snippet: item.source_snippet,
-        syllabus_upload_id: item.syllabus_upload_id,
-      });
+        confidence: i.confidence,
+        source_snippet: i.source_snippet,
+        syllabus_upload_id: i.syllabus_upload_id,
+      };
+    });
+    if (assignments.length > 0) {
+      const { error } = await supabase.from('assignments').insert(assignments);
       if (error) throw error;
-    } else if (item.item_kind === 'professor_email') {
-      const { error } = await supabase
-        .from('courses')
-        .update({ professor_email: p.email, ...(p.name ? { professor_name: p.name } : {}) })
-        .eq('id', item.course_id);
-      if (error) throw error;
-    } else if (item.item_kind === 'meeting_time' && p.kind === 'office_hours') {
-      const { error } = await supabase
-        .from('courses')
-        .update({ office_hours: describeMeeting(p) })
-        .eq('id', item.course_id);
-      if (error) throw error;
-    } else if (item.item_kind === 'meeting_time') {
-      if (!p.days?.length || !p.start_time || !p.end_time) {
-        throw new Error('Add the days and start and end times before accepting this meeting');
-      }
-      const { error } = await supabase.from('course_meetings').insert({
+    }
+
+    const meetings = items.filter(i => i.item_kind === 'meeting_time' && !isOfficeHours(i)).map(i => {
+      const p = payloadOf(i);
+      return {
         user_id: userId,
-        course_id: item.course_id,
+        course_id: i.course_id!,
         days: p.days,
         start_time: p.start_time,
         end_time: p.end_time,
         location: p.location || null,
         timezone: p.parser_context?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-      });
+      };
+    });
+    if (meetings.length > 0) {
+      const { error } = await supabase.from('course_meetings').insert(meetings);
+      if (error) throw error;
+    }
+
+    for (const item of items.filter(i => i.item_kind === 'professor_email' || isOfficeHours(i))) {
+      const p = payloadOf(item);
+      const update = item.item_kind === 'professor_email'
+        ? { professor_email: p.email, ...(p.name ? { professor_name: p.name } : {}) }
+        : { office_hours: describeMeeting(p) };
+      const { error } = await supabase.from('courses').update(update).eq('id', item.course_id!);
       if (error) throw error;
     }
 
     const { error } = await supabase
       .from('extracted_items')
       .update({ status: 'accepted', reviewed_at: new Date().toISOString() })
-      .eq('id', item.id);
+      .in('id', items.map(i => i.id));
     if (error) throw error;
   },
 

@@ -306,12 +306,14 @@ export const mockAdapter: SyllabusPipelinePort = {
     return uploadIds.map(id => summaries.get(id)).find(Boolean) ?? null;
   },
 
-  async acceptItem(item) {
+  async acceptItems(items) {
     await delay(200);
-    const target = store.get(item.syllabus_upload_id)?.find(i => i.id === item.id);
-    if (target) {
-      target.status = 'accepted';
-      target.reviewed_at = new Date().toISOString();
+    for (const item of items) {
+      const target = store.get(item.syllabus_upload_id)?.find(i => i.id === item.id);
+      if (target) {
+        target.status = 'accepted';
+        target.reviewed_at = new Date().toISOString();
+      }
     }
   },
 

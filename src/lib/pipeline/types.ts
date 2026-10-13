@@ -68,7 +68,8 @@ export interface SyllabusPipelinePort {
 
   fetchExtractionSummary(uploadIds: string[]): Promise<ExtractionSummary | null>;
 
-  acceptItem(item: ExtractedItem, userId: string): Promise<void>;
+  // Accepts several items together; all-or-nothing per destination table.
+  acceptItems(items: ExtractedItem[], userId: string): Promise<void>;
 
   discardItem(itemId: string): Promise<void>;
 
