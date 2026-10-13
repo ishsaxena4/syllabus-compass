@@ -25,11 +25,15 @@ function json(body: unknown, status = 200): Response {
   })
 }
 
-function publishableKey(): string {
+// Prefer the platform-injected key; fall back to the publishable key the client sent
+// (it is public by design). Legacy anon/service_role JWTs are never used.
+function publishableKey(req: Request): string {
   const keys = JSON.parse(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS') ?? '{}') as Record<string, string>
   const key = keys.default ?? Object.values(keys)[0]
-  if (!key) throw new Error('SUPABASE_PUBLISHABLE_KEYS is not set')
-  return key
+  if (key) return key
+  const sent = req.headers.get('apikey')
+  if (sent?.startsWith('sb_publishable_')) return sent
+  throw new Error('No publishable key available (SUPABASE_PUBLISHABLE_KEYS is not set)')
 }
 
 // Today's date in the student's timezone, so the year and "next week" use their calendar.
@@ -46,7 +50,7 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401)
 
-    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, publishableKey(), {
+    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, publishableKey(req), {
       global: { headers: { Authorization: authHeader } },
       auth: { persistSession: false, autoRefreshToken: false },
     })
