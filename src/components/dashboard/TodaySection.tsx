@@ -2,6 +2,8 @@ import { format, isToday, isTomorrow } from 'date-fns';
 import { Clock, Check } from 'lucide-react';
 import { Assignment, Course } from '@/types';
 import { CoursePill } from '@/components/shared/CoursePill';
+import { AssignmentTypeIcon } from '@/components/shared/AssignmentTypeIcon';
+import { byDueDate, dueWithin } from '@/lib/assignments';
 
 interface TodaySectionProps {
   assignments: Assignment[];
@@ -11,9 +13,9 @@ interface TodaySectionProps {
 export function TodaySection({ assignments, courses }: TodaySectionProps) {
   const getCourse = (courseId: string) => courses.find((c) => c.id === courseId);
 
-  const todayAssignments = assignments.filter(
-    (a) => isToday(a.dueDate) || isTomorrow(a.dueDate)
-  );
+  const todayAssignments = assignments
+    .filter((a) => dueWithin(a, 1))
+    .sort(byDueDate);
 
   if (todayAssignments.length === 0) {
     return (
@@ -44,7 +46,7 @@ export function TodaySection({ assignments, courses }: TodaySectionProps) {
       <div className="space-y-2">
         {todayAssignments.map((assignment) => {
           const course = getCourse(assignment.courseId);
-          if (!course) return null;
+          if (!course || !assignment.dueDate) return null;
 
           return (
             <div
@@ -57,7 +59,10 @@ export function TodaySection({ assignments, courses }: TodaySectionProps) {
                 <p className="text-sm font-medium text-foreground truncate">
                   {assignment.title}
                 </p>
-                <CoursePill name={course.section || course.name} color={course.color} className="mt-1" />
+                <div className="flex items-center gap-2 mt-1">
+                  <CoursePill name={course.section || course.name} color={course.color} />
+                  {assignment.type === 'exam' && <AssignmentTypeIcon type="exam" />}
+                </div>
               </div>
 
               <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">

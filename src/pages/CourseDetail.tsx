@@ -1,13 +1,18 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Clock, MapPin, ChevronRight, Check, FileText, Trash2 } from 'lucide-react';
-import { format, isFuture } from 'date-fns';
+import { ArrowLeft, Mail, Clock, MapPin, ChevronRight, ChevronDown, FileText, Trash2 } from 'lucide-react';
+import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { AssignmentTypeIcon } from '@/components/shared/AssignmentTypeIcon';
 import { CourseCalendar } from '@/components/course/CourseCalendar';
+import { ExamTimeline } from '@/components/course/ExamTimeline';
 import { AddAssignmentCard } from '@/components/shared/AddAssignmentCard';
+import { CompleteToggle } from '@/components/shared/CompleteToggle';
+import { byDueDate, isOpen } from '@/lib/assignments';
+import { formatClockRange } from '@/lib/time';
+import type { Assignment } from '@/types';
 import { useDeleteCourse, useLiveAssignments, useLiveCourses } from '@/hooks/useAcademicData';
 import {
   AlertDialog,
@@ -21,6 +26,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 export default function CourseDetail() {
   const { id } = useParams();
@@ -33,6 +39,7 @@ export default function CourseDetail() {
   } = useLiveAssignments();
   const { mutateAsync: deleteCourse, isPending: isDeletingCourse } = useDeleteCourse();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [showClosed, setShowClosed] = useState(false);
 
   const course = courses.find((c) => c.id === id);
   const assignments = allAssignments.filter((a) => a.courseId === id);
@@ -52,10 +59,45 @@ export default function CourseDetail() {
     );
   }
 
-  const upcomingAssignments = assignments
-    .filter((a) => isFuture(a.dueDate))
-    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
-    .slice(0, 3);
+  const openAssignments = assignments.filter(isOpen).sort(byDueDate);
+  // Past due or done, most recent first.
+  const closedAssignments = assignments.filter((a) => !isOpen(a)).sort(byDueDate).reverse();
+  const upcomingAssignments = openAssignments.slice(0, 3);
+
+  function renderRow(assignment: Assignment) {
+    const showBadge = assignment.status === 'due-soon' || assignment.status === 'overdue';
+    return (
+      <div
+        key={assignment.id}
+        className={cn(
+          'flex items-center gap-4 p-3 -mx-2 rounded-lg hover:bg-secondary/50 transition-colors',
+          assignment.status === 'completed' && 'opacity-60',
+        )}
+      >
+        <CompleteToggle assignment={assignment} />
+        <div className="flex-1 min-w-0">
+          <p className={cn(
+            'text-sm font-medium text-foreground truncate',
+            assignment.status === 'completed' && 'line-through',
+          )}>
+            {assignment.title}
+          </p>
+          <AssignmentTypeIcon type={assignment.type} />
+        </div>
+        <div className="text-right shrink-0">
+          {assignment.dueDate ? (
+            <>
+              <p className="text-sm font-medium text-foreground">{format(assignment.dueDate, 'MMM d')}</p>
+              <p className="text-xs text-muted-foreground">{format(assignment.dueDate, 'h:mm a')}</p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Date TBA</p>
+          )}
+        </div>
+        {showBadge && <StatusBadge status={assignment.status} />}
+      </div>
+    );
+  }
 
   const handleDeleteCourse = async () => {
     if (!course) return;
@@ -144,7 +186,7 @@ export default function CourseDetail() {
                 <>
                   <div className="flex items-center gap-1.5">
                     <Clock className="w-4 h-4" />
-                    <span>{course.schedule.days.join(', ')} · {course.schedule.startTime} - {course.schedule.endTime}</span>
+                    <span>{course.schedule.days.join(', ')} · {formatClockRange(course.schedule.startTime, course.schedule.endTime)}</span>
                   </div>
                   {course.schedule.location && (
                     <div className="flex items-center gap-1.5">
@@ -170,34 +212,17 @@ export default function CourseDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6">
+          <ExamTimeline assignments={assignments} />
+
           {/* Upcoming Deadlines */}
           <div className="card-elevated p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-foreground">Upcoming Deadlines</h2>
-              <span className="text-xs text-muted-foreground">{upcomingAssignments.length} items</span>
+              <span className="text-xs text-muted-foreground">{openAssignments.length} open</span>
             </div>
             
             {upcomingAssignments.length > 0 ? (
-              <div className="space-y-3">
-                {upcomingAssignments.map((assignment) => (
-                  <div
-                    key={assignment.id}
-                    className="flex items-center gap-4 p-3 -mx-2 rounded-lg hover:bg-secondary/50 transition-colors cursor-pointer"
-                  >
-                    <button className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center hover:border-course-sage hover:bg-course-sage/10 transition-colors shrink-0">
-                      <Check className="w-3 h-3 text-transparent" />
-                    </button>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{assignment.title}</p>
-                      <AssignmentTypeIcon type={assignment.type} />
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-medium text-foreground">{format(assignment.dueDate, 'MMM d')}</p>
-                      <p className="text-xs text-muted-foreground">{format(assignment.dueDate, 'h:mm a')}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <div className="space-y-3">{upcomingAssignments.map(renderRow)}</div>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-4">No upcoming deadlines</p>
             )}
@@ -224,28 +249,24 @@ export default function CourseDetail() {
 
         <TabsContent value="assignments" className="mt-6 space-y-4">
           <div className="card-elevated p-5">
-            <div className="space-y-3">
-              {assignments.map((assignment) => (
-                <div
-                  key={assignment.id}
-                  className="flex items-center gap-4 p-3 -mx-2 rounded-lg hover:bg-secondary/50 transition-colors cursor-pointer group"
+            {openAssignments.length > 0 ? (
+              <div className="space-y-3">{openAssignments.map(renderRow)}</div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">Nothing left to do</p>
+            )}
+            {closedAssignments.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setShowClosed((v) => !v)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <button className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center hover:border-course-sage hover:bg-course-sage/10 transition-colors shrink-0">
-                    <Check className="w-3 h-3 text-transparent group-hover:text-muted-foreground/50" />
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{assignment.title}</p>
-                    <AssignmentTypeIcon type={assignment.type} />
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-medium text-foreground">{format(assignment.dueDate, 'MMM d')}</p>
-                    <p className="text-xs text-muted-foreground">{format(assignment.dueDate, 'h:mm a')}</p>
-                  </div>
-                  <StatusBadge status={assignment.status} />
-                  <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-              ))}
-            </div>
+                  {showClosed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                  Past and done ({closedAssignments.length})
+                </button>
+                {showClosed && <div className="space-y-3 mt-3">{closedAssignments.map(renderRow)}</div>}
+              </div>
+            )}
           </div>
           <AddAssignmentCard
             fixedCourseId={course.id}
@@ -298,7 +319,7 @@ export default function CourseDetail() {
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-muted-foreground" />
                     <span className="text-foreground">
-                      {course.schedule.days.join(', ')} · {course.schedule.startTime} - {course.schedule.endTime}
+                      {course.schedule.days.join(', ')} · {formatClockRange(course.schedule.startTime, course.schedule.endTime)}
                     </span>
                   </div>
                   {course.schedule.location && (

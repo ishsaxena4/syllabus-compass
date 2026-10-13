@@ -1,146 +1,211 @@
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { extractTextFromPdf } from '@/lib/pdfTextExtract';
+import { isAssignmentType } from '@/types';
+import { canAcceptItem } from './review';
+import { formatClockRange } from '@/lib/time';
 import type {
+  BatchProcessResult,
+  ExtractionSummary,
   SyllabusPipelinePort,
   ExtractedItem,
-  ProcessResult,
 } from './types';
 
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+const EXTENSION_MIMES: Record<string, string> = {
+  '.pdf': 'application/pdf',
+  '.docx': DOCX_MIME,
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+};
+
+function fileExtension(file: File): string {
+  const match = /\.[a-z0-9]+$/i.exec(file.name);
+  return match ? match[0].toLowerCase() : '';
+}
+
+// Browsers sometimes leave File.type empty (notably for .docx); fall back to the extension.
+function fileMime(file: File): string {
+  return file.type || EXTENSION_MIMES[fileExtension(file)] || 'application/octet-stream';
+}
+
+async function functionErrorMessage(error: unknown): Promise<string> {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const body = await error.context.json();
+      if (body?.error) return String(body.error);
+    } catch {
+      // Fall through to the generic message.
+    }
+  }
+  return error instanceof Error ? error.message : 'Processing failed';
+}
+
+const DAY_LETTERS: Record<string, string> = {
+  mon: 'M', tue: 'T', wed: 'W', thu: 'R', fri: 'F', sat: 'Sa', sun: 'Su',
+};
+
+function describeMeeting(p: Record<string, any>): string {
+  const days = (p.days || []).map((d: string) => DAY_LETTERS[d] || d).join('');
+  const times = formatClockRange(p.start_time, p.end_time);
+  return [[days, times].filter(Boolean).join(' '), p.location].filter(Boolean).join(' · ');
+}
+
 export const realAdapter: SyllabusPipelinePort = {
-  async processUpload({ file, courseId, userId, textOverride, onProgress }) {
-    onProgress('uploading', 'Uploading file…');
+  async processUploads({ files, courseId, userId, studentNotes, onProgress }) {
+    const uploadIds: string[] = [];
+    for (let i = 0; i < files.length; i += 1) {
+      const file = files[i];
+      onProgress('uploading', `Uploading ${i + 1} of ${files.length}: ${file.name}`);
 
-    const fileId = crypto.randomUUID();
-    let filePath = `${userId}/${fileId}.pdf`;
-    const uploadFileName = file?.name || 'demo-seed.txt';
-
-    if (file) {
+      const mime = fileMime(file);
+      const filePath = `${userId}/${crypto.randomUUID()}${fileExtension(file)}`;
       const { error: storageErr } = await supabase.storage
         .from('syllabi')
-        .upload(filePath, file, { contentType: file.type, upsert: false });
-      if (storageErr) throw new Error(`Storage upload failed: ${storageErr.message}`);
-    } else {
-      filePath = `demo/${userId}/${fileId}.txt`;
-    }
+        .upload(filePath, file, { contentType: mime, upsert: false });
+      if (storageErr) throw new Error(`Could not upload ${file.name}: ${storageErr.message}`);
 
-    const { data: uploadRow, error: rowErr } = await supabase
-      .from('syllabus_uploads')
-      .insert({
-        user_id: userId,
-        course_id: courseId,
-        file_name: uploadFileName,
-        file_mime: file?.type || 'text/plain',
-        file_path: filePath,
-      })
-      .select()
-      .single();
-
-    if (rowErr || !uploadRow) {
-      throw new Error(rowErr?.message || 'Failed to create upload record');
-    }
-
-    onProgress('extracting', 'Extracting text from PDF…');
-
-    let extractedText: string;
-    if (textOverride) {
-      extractedText = textOverride;
-    } else if (file) {
-      extractedText = await extractTextFromPdf(file);
-      if (!extractedText.trim()) {
-        throw new Error(
-          'No text could be extracted from the PDF. The file may be image-based or empty.',
-        );
-      }
-    } else {
-      throw new Error('No file or text provided');
-    }
-
-    onProgress('processing', 'Analyzing syllabus…');
-
-    const { data: fnData, error: fnErr } = await supabase.functions.invoke(
-      'process-syllabus',
-      {
-        body: {
-          syllabus_upload_id: uploadRow.id,
+      const { data: uploadRow, error: rowErr } = await supabase
+        .from('syllabus_uploads')
+        .insert({
+          user_id: userId,
           course_id: courseId,
-          extracted_text: extractedText,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-      },
+          file_name: file.name,
+          file_mime: mime,
+          file_path: filePath,
+        })
+        .select('id')
+        .single();
+      if (rowErr || !uploadRow) {
+        throw new Error(rowErr?.message || 'Failed to create upload record');
+      }
+      uploadIds.push(uploadRow.id);
+    }
+
+    onProgress(
+      'processing',
+      `Reading ${files.length === 1 ? 'your syllabus' : `${files.length} files`}. This usually takes under a minute.`,
     );
 
-    if (fnErr) throw new Error(fnErr.message || 'Processing failed');
-    if (!fnData?.ok) throw new Error(fnData?.error || 'Processing returned an error');
+    const { data, error } = await supabase.functions.invoke('process-syllabus', {
+      body: {
+        syllabus_upload_ids: uploadIds,
+        student_notes: studentNotes?.trim() || null,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
+    });
+    if (error) throw new Error(await functionErrorMessage(error));
+    if (!data?.ok) throw new Error(data?.error || 'Processing returned an error');
 
-    onProgress('ready', `Found ${fnData.created_count} items. Ready for review!`);
-
+    onProgress('ready', `Found ${data.created_count} items. Ready for review!`);
     return {
-      uploadId: uploadRow.id,
+      uploadIds,
       courseId,
-      createdCount: fnData.created_count as number,
-    } satisfies ProcessResult;
+      createdCount: data.created_count as number,
+      summary: (data.extraction ?? null) as ExtractionSummary | null,
+    } satisfies BatchProcessResult;
   },
 
-  async fetchExtractedItems(uploadId) {
+  async fetchExtractedItems(uploadIds) {
     const { data, error } = await supabase
       .from('extracted_items')
       .select('*')
-      .eq('syllabus_upload_id', uploadId)
+      .in('syllabus_upload_id', uploadIds)
       .eq('status', 'pending')
       .order('created_at');
-
     if (error) throw new Error('Failed to load extracted items');
     return (data || []) as ExtractedItem[];
   },
 
-  async acceptItem(item, userId) {
-    const p = item.payload as Record<string, any>;
+  async fetchExtractionSummary(uploadIds) {
+    const { data, error } = await supabase
+      .from('syllabus_uploads')
+      .select('extraction, processed_at')
+      .in('id', uploadIds)
+      .not('extraction', 'is', null)
+      .order('processed_at', { ascending: false })
+      .limit(1);
+    if (error) throw new Error('Failed to load extraction details');
+    return (data?.[0]?.extraction ?? null) as unknown as ExtractionSummary | null;
+  },
 
-    if (item.item_kind === 'assignment' && item.course_id) {
-      const validTypes = ['homework', 'quiz', 'exam', 'project', 'reading', 'lab', 'other'];
-      const { error } = await supabase.from('assignments').insert({
+  async acceptItems(items, userId, options) {
+    const blocked = items.find(i => !canAcceptItem(i));
+    if (blocked) {
+      throw new Error(
+        blocked.course_id
+          ? `Add the days and start and end times to "${blocked.title}" before accepting it`
+          : `"${blocked.title}" is not linked to a course`,
+      );
+    }
+    const payloadOf = (i: ExtractedItem) => i.payload as Record<string, any>;
+    const isOfficeHours = (i: ExtractedItem) => i.item_kind === 'meeting_time' && payloadOf(i).kind === 'office_hours';
+
+    // Assignments and meetings go in one insert each; course fields are per course.
+    const now = Date.now();
+    const assignments = items.filter(i => i.item_kind === 'assignment').map(i => {
+      const p = payloadOf(i);
+      const isPast = Boolean(p.due_at) && new Date(p.due_at).getTime() < now;
+      return {
         user_id: userId,
-        course_id: item.course_id,
-        title: p.title || item.title || 'Untitled',
-        type: validTypes.includes(p.type) ? p.type : 'other',
+        course_id: i.course_id!,
+        title: p.title || i.title || 'Untitled',
+        type: isAssignmentType(p.type) ? p.type : 'other',
         due_at: p.due_at || null,
-        status: 'upcoming',
+        notes: p.ambiguity || null,
+        status: options?.markPastDone && isPast ? ('completed' as const) : ('upcoming' as const),
         confirmed: true,
-        confidence: item.confidence,
-        source_snippet: item.source_snippet,
-        syllabus_upload_id: item.syllabus_upload_id,
-      });
+        confidence: i.confidence,
+        source_snippet: i.source_snippet,
+        syllabus_upload_id: i.syllabus_upload_id,
+      };
+    });
+    if (assignments.length > 0) {
+      const { error } = await supabase.from('assignments').insert(assignments);
       if (error) throw error;
-    } else if (item.item_kind === 'professor_email' && item.course_id) {
-      const { error } = await supabase
-        .from('courses')
-        .update({ professor_email: p.email })
-        .eq('id', item.course_id);
-      if (error) throw error;
-    } else if (item.item_kind === 'meeting_time' && item.course_id) {
-      const { error } = await supabase.from('course_meetings').insert({
+    }
+
+    const meetings = items.filter(i => i.item_kind === 'meeting_time' && !isOfficeHours(i)).map(i => {
+      const p = payloadOf(i);
+      return {
         user_id: userId,
-        course_id: item.course_id,
+        course_id: i.course_id!,
         days: p.days,
         start_time: p.start_time,
         end_time: p.end_time,
         location: p.location || null,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      });
+        timezone: p.parser_context?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+      };
+    });
+    if (meetings.length > 0) {
+      const { error } = await supabase.from('course_meetings').insert(meetings);
       if (error) throw error;
     }
 
-    await supabase
+    for (const item of items.filter(i => i.item_kind === 'professor_email' || isOfficeHours(i))) {
+      const p = payloadOf(item);
+      const update = item.item_kind === 'professor_email'
+        ? { professor_email: p.email, ...(p.name ? { professor_name: p.name } : {}) }
+        : { office_hours: describeMeeting(p) };
+      const { error } = await supabase.from('courses').update(update).eq('id', item.course_id!);
+      if (error) throw error;
+    }
+
+    const { error } = await supabase
       .from('extracted_items')
       .update({ status: 'accepted', reviewed_at: new Date().toISOString() })
-      .eq('id', item.id);
+      .in('id', items.map(i => i.id));
+    if (error) throw error;
   },
 
   async discardItem(itemId) {
-    await supabase
+    const { error } = await supabase
       .from('extracted_items')
       .update({ status: 'discarded', reviewed_at: new Date().toISOString() })
       .eq('id', itemId);
+    if (error) throw error;
   },
 
   async updateItem(itemId, updates) {

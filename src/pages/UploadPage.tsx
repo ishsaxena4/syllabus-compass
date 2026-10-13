@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
-  Upload, CheckCircle, AlertCircle, Loader2, Beaker,
+  Upload, CheckCircle, AlertCircle, Loader2, FileText, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,36 +19,24 @@ import type { Tables } from '@/integrations/supabase/types';
 
 const PIPELINE_LABELS: Record<UploadStep, string> = {
   idle: '',
-  uploading: 'Uploading file…',
-  extracting: 'Extracting text from PDF…',
-  processing: 'Analyzing syllabus…',
+  uploading: 'Uploading files…',
+  processing: 'Reading your syllabus…',
   ready: 'Ready for review!',
   error: 'Something went wrong',
 };
 
-const DEMO_TEXT = `CS 301 - Data Structures and Algorithms
-Spring 2026
+const MAX_FILES = 10;
+const MAX_FILE_BYTES = 25 * 1024 * 1024;
+const SUPPORTED_EXTENSIONS = ['.pdf', '.docx', '.png', '.jpg', '.jpeg', '.webp'];
 
-Instructor: Dr. Sarah Johnson
-Email: sjohnson@university.edu
-Office: Room 301, CS Building
-Office Hours: MWF 2:00-3:00 PM
+function isSupportedSyllabusFile(file: File): boolean {
+  const lowerName = file.name.toLowerCase();
+  return SUPPORTED_EXTENSIONS.some(ext => lowerName.endsWith(ext));
+}
 
-Class Schedule: MWF 10:30-11:20 AM
-Location: Room 204, Engineering Hall
-
-Course Schedule and Assignments:
-
-Homework 1: Arrays and Linked Lists - Due January 27, 2026
-Quiz 1: Basic Data Structures - February 3, 2026
-Homework 2: Stacks and Queues - Due February 10, 2026
-Midterm Exam - February 24, 2026 at 10:30 AM
-Project Proposal - Due March 10, 2026
-Lab 1: Binary Search Trees - Due March 17, 2026
-Homework 3: Graph Algorithms - Due April 7, 2026
-Reading: Chapter 12 Dynamic Programming - Due April 14, 2026
-Final Project Presentation - TBD (Week 15)
-Final Exam - May 4, 2026 at 8:00 AM`;
+function formatSize(bytes: number): string {
+  return bytes < 1024 * 1024 ? `${Math.ceil(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 export default function UploadPage() {
   const [searchParams] = useSearchParams();
@@ -57,15 +45,18 @@ export default function UploadPage() {
   const pipeline = usePipeline();
 
   const reviewId = searchParams.get('review');
+  const reviewIds = reviewId
+    ? reviewId.split(',').map(v => v.trim()).filter(Boolean)
+    : [];
 
   const [courses, setCourses] = useState<Tables<'courses'>[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const [notes, setNotes] = useState('');
   const [step, setStep] = useState<UploadStep>('idle');
+  const [progressMsg, setProgressMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isDragging, setIsDragging] = useState(false);
-  const [fileName, setFileName] = useState('');
-  const [showDemo, setShowDemo] = useState(false);
-  const [demoText, setDemoText] = useState(DEMO_TEXT);
 
   useEffect(() => {
     if (user) refreshCourses();
@@ -81,11 +72,32 @@ export default function UploadPage() {
     if (data) setCourses(data);
   }
 
-  if (reviewId) {
-    return <ReviewExtractedItems syllabusUploadId={reviewId} />;
+  if (reviewIds.length > 0) {
+    return <ReviewExtractedItems syllabusUploadIds={reviewIds} />;
   }
 
-  async function processUpload(file: File | null, textOverride?: string) {
+  function addFiles(incoming: File[]) {
+    const supported = incoming.filter(isSupportedSyllabusFile);
+    if (supported.length < incoming.length) {
+      toast.error('Some files were skipped. Supported: PDF, DOCX, PNG, JPG, WEBP');
+    }
+    const tooBig = supported.filter(f => f.size > MAX_FILE_BYTES);
+    if (tooBig.length > 0) {
+      toast.error(`Files must be under 25 MB: ${tooBig.map(f => f.name).join(', ')}`);
+    }
+    setFiles(prev => {
+      const names = new Set(prev.map(f => f.name));
+      const next = [...prev, ...supported.filter(f => f.size <= MAX_FILE_BYTES && !names.has(f.name))];
+      if (next.length > MAX_FILES) toast.error(`Up to ${MAX_FILES} files per course`);
+      return next.slice(0, MAX_FILES);
+    });
+  }
+
+  function removeFile(name: string) {
+    setFiles(prev => prev.filter(f => f.name !== name));
+  }
+
+  async function extract() {
     if (!user) {
       toast.error('Please sign in');
       return;
@@ -94,24 +106,31 @@ export default function UploadPage() {
       toast.error('Please select a course first');
       return;
     }
+    if (files.length === 0) {
+      toast.error('Please add at least one file');
+      return;
+    }
 
     setErrorMsg('');
-    setFileName(file?.name || 'demo-seed.txt');
-
     try {
-      const result = await pipeline.processUpload({
-        file,
+      const result = await pipeline.processUploads({
+        files,
         courseId: selectedCourseId,
         userId: user.id,
-        textOverride,
+        studentNotes: notes,
         onProgress: (s, msg) => {
           setStep(s);
-          if (s === 'ready' && msg) toast.success(msg);
+          setProgressMsg(msg || '');
         },
       });
 
+      if (result.createdCount === 0) {
+        toast.warning('No items were found. Check the warnings on the next screen.');
+      } else {
+        toast.success(`Found ${result.createdCount} items.`);
+      }
       setTimeout(() => {
-        navigate(`/upload?review=${result.uploadId}`);
+        navigate(`/upload?review=${result.uploadIds.join(',')}`);
       }, 600);
     } catch (err: any) {
       setStep('error');
@@ -133,22 +152,15 @@ export default function UploadPage() {
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setIsDragging(false);
-    const file = Array.from(e.dataTransfer.files).find(
-      f => f.type === 'application/pdf',
-    );
-    if (file) {
-      processUpload(file);
-    } else {
-      toast.error('Please drop a PDF file');
-    }
+    addFiles(Array.from(e.dataTransfer.files));
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) processUpload(file);
+    addFiles(Array.from(e.target.files || []));
+    e.target.value = '';
   }
 
-  const isProcessing = step !== 'idle' && step !== 'error' && step !== 'ready';
+  const isProcessing = step === 'uploading' || step === 'processing';
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
@@ -156,8 +168,8 @@ export default function UploadPage() {
       <div className="text-center animate-fade-up">
         <h1 className="text-2xl font-semibold text-foreground">Upload Syllabus</h1>
         <p className="text-sm text-muted-foreground mt-2">
-          Upload your syllabus and we&rsquo;ll extract assignments, due dates, and course info
-          automatically
+          Add a course&rsquo;s syllabus and schedule. We&rsquo;ll read them together and pull out
+          every deadline, meeting time, and instructor email for you to review.
         </p>
       </div>
 
@@ -172,7 +184,7 @@ export default function UploadPage() {
             <AddCourseDialog onCourseAdded={refreshCourses} />
           </div>
         ) : (
-          <Select value={selectedCourseId} onValueChange={setSelectedCourseId}>
+          <Select value={selectedCourseId} onValueChange={setSelectedCourseId} disabled={isProcessing}>
             <SelectTrigger>
               <SelectValue placeholder="Choose a course…" />
             </SelectTrigger>
@@ -194,7 +206,7 @@ export default function UploadPage() {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          'card-elevated p-12 border-2 border-dashed transition-all duration-200 animate-fade-up relative',
+          'card-elevated p-10 border-2 border-dashed transition-all duration-200 animate-fade-up relative',
           isDragging
             ? 'border-primary bg-primary/5'
             : 'border-border hover:border-muted-foreground/50',
@@ -225,47 +237,34 @@ export default function UploadPage() {
             )}
           </div>
 
-          {step === 'idle' && (
+          {(step === 'idle' || step === 'error') && (
             <>
               <h3 className="text-base font-medium text-foreground">
-                {isDragging ? 'Drop your file here' : 'Drag & drop your syllabus PDF'}
+                {isDragging ? 'Drop your files here' : 'Drag & drop your syllabus and schedule'}
               </h3>
               <p className="text-sm text-muted-foreground mt-1">or click to browse</p>
-              <p className="text-xs text-muted-foreground mt-3">PDF files only</p>
+              <p className="text-xs text-muted-foreground mt-3">
+                PDF, DOCX, PNG, JPG, WEBP &middot; up to {MAX_FILES} files
+              </p>
             </>
           )}
 
           {isProcessing && (
             <div className="space-y-2">
-              <h3 className="text-base font-medium text-foreground">
-                {PIPELINE_LABELS[step]}
-              </h3>
-              {fileName && (
-                <p className="text-xs text-muted-foreground">{fileName}</p>
-              )}
+              <h3 className="text-base font-medium text-foreground">{PIPELINE_LABELS[step]}</h3>
+              {progressMsg && <p className="text-xs text-muted-foreground">{progressMsg}</p>}
             </div>
           )}
 
           {step === 'ready' && (
-            <h3 className="text-base font-medium text-green-600">
-              {PIPELINE_LABELS.ready}
-            </h3>
+            <h3 className="text-base font-medium text-green-600">{PIPELINE_LABELS.ready}</h3>
           )}
 
-          {step === 'error' && (
-            <div className="space-y-2">
-              <h3 className="text-base font-medium text-red-500">Error</h3>
-              <p className="text-xs text-red-400 max-w-sm">{errorMsg}</p>
-              <Button size="sm" variant="outline" onClick={() => setStep('idle')}>
-                Try Again
-              </Button>
-            </div>
-          )}
-
-          {step === 'idle' && (
+          {(step === 'idle' || step === 'error') && (
             <input
               type="file"
-              accept=".pdf"
+              accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/webp"
+              multiple
               onChange={handleFileSelect}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
@@ -273,43 +272,61 @@ export default function UploadPage() {
         </div>
       </div>
 
-      {/* Demo / Seed Tool */}
-      <div className="animate-fade-up" style={{ animationDelay: '150ms' }}>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowDemo(!showDemo)}
-          className="text-xs text-muted-foreground"
-        >
-          <Beaker className="w-3 h-3 mr-1" />
-          {showDemo ? 'Hide' : 'Show'} demo / seed tool
-        </Button>
+      {step === 'error' && (
+        <div className="card-elevated p-3 border border-red-500/25 bg-red-500/5 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 mt-0.5 text-red-500 shrink-0" />
+          <p className="text-xs text-red-500">{errorMsg}</p>
+        </div>
+      )}
 
-        {showDemo && (
-          <div className="mt-3 space-y-3 card-elevated p-4">
-            <p className="text-xs text-muted-foreground">
-              Paste or edit sample syllabus text below, then click &ldquo;Process&rdquo; to
-              test the pipeline without uploading a PDF.
-            </p>
+      {files.length > 0 && (
+        <div className="space-y-4 animate-fade-up">
+          <ul className="space-y-2">
+            {files.map(f => (
+              <li key={f.name} className="card-elevated px-3 py-2 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="text-sm truncate flex-1">{f.name}</span>
+                <span className="text-xs text-muted-foreground shrink-0">{formatSize(f.size)}</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => removeFile(f.name)}
+                  disabled={isProcessing}
+                  aria-label={`Remove ${f.name}`}
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+
+          <div>
+            <label htmlFor="student-notes" className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              Anything we should know? (optional)
+            </label>
             <Textarea
-              value={demoText}
-              onChange={e => setDemoText(e.target.value)}
-              rows={10}
-              className="text-xs font-mono"
+              id="student-notes"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="e.g. My recitation is Thursdays 2:30–3:20pm. I'm in section 018."
+              rows={3}
+              maxLength={2000}
+              disabled={isProcessing}
             />
-            <Button
-              size="sm"
-              disabled={isProcessing || !selectedCourseId || !demoText.trim()}
-              onClick={() => processUpload(null, demoText)}
-            >
-              {isProcessing ? (
-                <Loader2 className="w-3 h-3 animate-spin mr-1" />
-              ) : null}
-              Process Demo Text
-            </Button>
           </div>
-        )}
-      </div>
+
+          <Button
+            className="w-full"
+            onClick={extract}
+            disabled={isProcessing || !selectedCourseId}
+          >
+            {isProcessing && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+            {selectedCourseId
+              ? `Extract from ${files.length} file${files.length === 1 ? '' : 's'}`
+              : 'Select a course to continue'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

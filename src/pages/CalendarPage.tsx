@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, List, Grid3X3 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, List, Grid3X3, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CoursePill } from '@/components/shared/CoursePill';
+import { AssignmentTypeIcon } from '@/components/shared/AssignmentTypeIcon';
 import { cn } from '@/lib/utils';
 import { useLiveAssignments, useLiveCourses } from '@/hooks/useAcademicData';
+import { byDueDate, isOpen } from '@/lib/assignments';
+import { DayDetailSheet } from '@/components/calendar/DayDetailSheet';
 
 type ViewMode = 'month' | 'agenda';
 
@@ -20,9 +23,18 @@ export default function CalendarPage() {
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
   const getCourse = (courseId: string) => courses.find((c) => c.id === courseId);
+
+  // Stepping to another day from the panel keeps the month grid in sync behind it.
+  function changeSelectedDate(date: Date | null) {
+    setSelectedDate(date);
+    if (date && !isSameMonth(date, currentDate)) setCurrentDate(date);
+  }
   
   const getAssignmentsForDay = (date: Date) => 
-    assignments.filter((a) => isSameDay(a.dueDate, date));
+    assignments
+      .filter((a) => a.dueDate && isSameDay(a.dueDate, date))
+      // Exams first so they are never hidden behind "+N more".
+      .sort((a, b) => Number(b.type === 'exam') - Number(a.type === 'exam'));
 
   const firstDayOfWeek = monthStart.getDay();
   const paddingDays = Array(firstDayOfWeek).fill(null);
@@ -149,13 +161,20 @@ export default function CalendarPage() {
                       return (
                         <div
                           key={assignment.id}
-                          className="text-xs p-1 rounded truncate"
-                          style={{ 
-                            backgroundColor: `hsl(var(--course-${course.color}) / 0.15)`,
-                            color: `hsl(var(--course-${course.color}))`
-                          }}
+                          className={cn(
+                            'text-xs p-1 rounded truncate',
+                            assignment.type === 'exam' && 'font-semibold flex items-center gap-1',
+                            assignment.status === 'completed' && 'line-through opacity-50',
+                          )}
+                          style={assignment.type === 'exam'
+                            ? { backgroundColor: `hsl(var(--course-${course.color}))`, color: 'white' }
+                            : {
+                                backgroundColor: `hsl(var(--course-${course.color}) / 0.15)`,
+                                color: `hsl(var(--course-${course.color}))`,
+                              }}
                         >
-                          {assignment.title}
+                          {assignment.type === 'exam' && <GraduationCap className="w-3 h-3 shrink-0" />}
+                          <span className="truncate">{assignment.title}</span>
                         </div>
                       );
                     })}
@@ -177,14 +196,16 @@ export default function CalendarPage() {
           </h2>
           <div className="space-y-3">
             {assignments
-              .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
+              .filter((a) => isOpen(a) && a.dueDate)
+              .sort(byDueDate)
               .map((assignment) => {
                 const course = getCourse(assignment.courseId);
-                if (!course) return null;
+                if (!course || !assignment.dueDate) return null;
 
                 return (
                   <div
                     key={assignment.id}
+                    onClick={() => changeSelectedDate(assignment.dueDate)}
                     className="flex items-center gap-4 p-3 rounded-lg hover:bg-secondary/50 transition-colors cursor-pointer"
                   >
                     <div
@@ -195,7 +216,10 @@ export default function CalendarPage() {
                       <p className="text-sm font-medium text-foreground truncate">
                         {assignment.title}
                       </p>
-                      <CoursePill name={course.section || course.name} color={course.color} className="mt-1" />
+                      <div className="flex items-center gap-2 mt-1">
+                        <CoursePill name={course.section || course.name} color={course.color} />
+                        {assignment.type === 'exam' && <AssignmentTypeIcon type="exam" />}
+                      </div>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm font-medium text-foreground">
@@ -211,6 +235,13 @@ export default function CalendarPage() {
           </div>
         </div>
       )}
+
+      <DayDetailSheet
+        date={selectedDate}
+        assignments={assignments}
+        courses={courses}
+        onDateChange={changeSelectedDate}
+      />
     </div>
   );
 }

@@ -3,7 +3,6 @@ import type { Json } from '@/integrations/supabase/types';
 export type UploadStep =
   | 'idle'
   | 'uploading'
-  | 'extracting'
   | 'processing'
   | 'ready'
   | 'error';
@@ -11,6 +10,8 @@ export type UploadStep =
 export type ItemKind = 'assignment' | 'professor_email' | 'meeting_time';
 export type Confidence = 'high' | 'medium' | 'low';
 export type ItemStatus = 'pending' | 'accepted' | 'discarded';
+// Where an assignment's due time came from (see extract/prompt.ts).
+export type TimeBasis = 'explicit' | 'course_policy' | 'meeting' | 'none';
 
 export interface ExtractedItem {
   id: string;
@@ -28,29 +29,53 @@ export interface ExtractedItem {
   user_id: string;
 }
 
-export interface ProcessResult {
-  uploadId: string;
+// Course-level output of one extraction, stored on syllabus_uploads.extraction.
+export interface ExtractionSummary {
+  course: {
+    code: string | null;
+    title: string | null;
+    term: string | null;
+    term_start_date: string | null;
+    term_end_date: string | null;
+  };
+  rules: { text: string; applies_to: string }[];
+  warnings: string[];
+  upload_ids: string[];
+  model: string;
+  usage: { input_tokens: number; output_tokens: number };
+  duration_ms: number;
+  extracted_at: string;
+}
+
+export interface BatchProcessResult {
+  uploadIds: string[];
   courseId: string;
   createdCount: number;
+  summary: ExtractionSummary | null;
 }
 
 export interface SyllabusPipelinePort {
-  processUpload(params: {
-    file: File | null;
+  // Uploads all of one course's files, then extracts them together in one call.
+  processUploads(params: {
+    files: File[];
     courseId: string;
     userId: string;
-    textOverride?: string;
+    studentNotes?: string;
     onProgress: (step: UploadStep, message?: string) => void;
-  }): Promise<ProcessResult>;
+  }): Promise<BatchProcessResult>;
 
-  fetchExtractedItems(uploadId: string): Promise<ExtractedItem[]>;
+  fetchExtractedItems(uploadIds: string[]): Promise<ExtractedItem[]>;
 
-  acceptItem(item: ExtractedItem, userId: string): Promise<void>;
+  fetchExtractionSummary(uploadIds: string[]): Promise<ExtractionSummary | null>;
+
+  // Accepts several items together; all-or-nothing per destination table.
+  // markPastDone imports assignments that are already past due as completed.
+  acceptItems(items: ExtractedItem[], userId: string, options?: { markPastDone?: boolean }): Promise<void>;
 
   discardItem(itemId: string): Promise<void>;
 
   updateItem(
     itemId: string,
-    updates: { payload: Record<string, unknown>; title: string | null },
+    updates: { payload: Json; title: string | null },
   ): Promise<void>;
 }

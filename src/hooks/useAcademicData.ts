@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { differenceInHours } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import type { AttentionItem, Assignment, Course, CourseColor } from "@/types";
+import type { AttentionItem, Assignment, AssignmentStatus, Course, CourseColor } from "@/types";
 
 const COURSE_COLORS: CourseColor[] = ["sage", "coral", "sky", "amber", "lavender", "rose"];
 
@@ -74,9 +74,11 @@ export function useLiveCourses() {
   });
 }
 
-function deriveStatus(dueAt: Date, rawStatus: "upcoming" | "completed"): Assignment["status"] {
+function deriveStatus(dueAt: Date | null, rawStatus: "upcoming" | "completed"): AssignmentStatus {
   if (rawStatus === "completed") return "completed";
+  if (!dueAt) return "upcoming";
   const hours = differenceInHours(dueAt, new Date());
+  if (hours < 0) return "overdue";
   if (hours <= 48) return "due-soon";
   return "upcoming";
 }
@@ -99,7 +101,7 @@ export function useLiveAssignments() {
       if (error) throw error;
 
       return (data || []).map((a) => {
-        const dueDate = a.due_at ? new Date(a.due_at) : new Date(a.created_at);
+        const dueDate = a.due_at ? new Date(a.due_at) : null;
         return {
           id: a.id,
           title: a.title,
@@ -193,5 +195,39 @@ export function useDeleteCourse() {
         queryClient.invalidateQueries({ queryKey: ["needs-onboarding", user?.id] }),
       ]);
     },
+  });
+}
+
+// Marks assignments done or not done. Updates the cache first so the checkbox
+// responds instantly, and rolls back if the save fails.
+export function useSetAssignmentsCompleted() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const key = ["assignments", user?.id];
+
+  return useMutation({
+    mutationFn: async ({ ids, completed }: { ids: string[]; completed: boolean }) => {
+      const { error } = await supabase
+        .from("assignments")
+        .update({ status: completed ? "completed" : "upcoming" })
+        .in("id", ids);
+      if (error) throw error;
+    },
+    onMutate: async ({ ids, completed }) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<Assignment[]>(key);
+      queryClient.setQueryData<Assignment[]>(key, (old = []) =>
+        old.map((a) =>
+          ids.includes(a.id)
+            ? { ...a, status: deriveStatus(a.dueDate, completed ? "completed" : "upcoming") }
+            : a,
+        ),
+      );
+      return { previous };
+    },
+    onError: (_error, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(key, context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
   });
 }
