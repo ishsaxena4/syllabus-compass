@@ -1,13 +1,13 @@
 import type {
-  BatchProcessResult,
+  ExtractionSummary,
   SyllabusPipelinePort,
   ExtractedItem,
-  ProcessResult,
 } from './types';
 
 const delay = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 const store = new Map<string, ExtractedItem[]>();
+const summaries = new Map<string, ExtractionSummary>();
 
 function mockId(): string {
   return `mock-${crypto.randomUUID()}`;
@@ -40,6 +40,7 @@ function seedItems(uploadId: string, courseId: string, userId: string): Extracte
       item_kind: 'meeting_time',
       title: 'MWF 10:30-11:20 AM',
       payload: {
+        kind: 'lecture',
         days: ['mon', 'wed', 'fri'],
         start_time: '10:30',
         end_time: '11:20',
@@ -64,6 +65,7 @@ function seedItems(uploadId: string, courseId: string, userId: string): Extracte
         type: 'homework',
         due_at: '2026-01-27T23:59:00',
         time_inferred: true,
+        time_basis: 'none',
       },
       confidence: 'high',
       status: 'pending',
@@ -84,6 +86,7 @@ function seedItems(uploadId: string, courseId: string, userId: string): Extracte
         type: 'quiz',
         due_at: '2026-02-03T23:59:00',
         time_inferred: true,
+        time_basis: 'none',
       },
       confidence: 'high',
       status: 'pending',
@@ -104,6 +107,7 @@ function seedItems(uploadId: string, courseId: string, userId: string): Extracte
         type: 'homework',
         due_at: '2026-02-10T23:59:00',
         time_inferred: true,
+        time_basis: 'none',
       },
       confidence: 'high',
       status: 'pending',
@@ -124,6 +128,7 @@ function seedItems(uploadId: string, courseId: string, userId: string): Extracte
         type: 'exam',
         due_at: '2026-02-24T10:30:00',
         time_inferred: false,
+        time_basis: 'explicit',
       },
       confidence: 'high',
       status: 'pending',
@@ -144,6 +149,7 @@ function seedItems(uploadId: string, courseId: string, userId: string): Extracte
         type: 'project',
         due_at: '2026-03-10T23:59:00',
         time_inferred: true,
+        time_basis: 'none',
       },
       confidence: 'medium',
       status: 'pending',
@@ -164,6 +170,7 @@ function seedItems(uploadId: string, courseId: string, userId: string): Extracte
         type: 'lab',
         due_at: '2026-03-17T23:59:00',
         time_inferred: true,
+        time_basis: 'none',
       },
       confidence: 'high',
       status: 'pending',
@@ -184,6 +191,7 @@ function seedItems(uploadId: string, courseId: string, userId: string): Extracte
         type: 'homework',
         due_at: '2026-04-07T23:59:00',
         time_inferred: true,
+        time_basis: 'none',
       },
       confidence: 'high',
       status: 'pending',
@@ -204,6 +212,7 @@ function seedItems(uploadId: string, courseId: string, userId: string): Extracte
         type: 'reading',
         due_at: '2026-04-14T23:59:00',
         time_inferred: true,
+        time_basis: 'none',
       },
       confidence: 'medium',
       status: 'pending',
@@ -224,6 +233,8 @@ function seedItems(uploadId: string, courseId: string, userId: string): Extracte
         type: 'project',
         due_at: null,
         time_inferred: false,
+        time_basis: 'none',
+        ambiguity: 'Listed as TBD (Week 15); check the course page for the date.',
       },
       confidence: 'low',
       status: 'pending',
@@ -244,6 +255,7 @@ function seedItems(uploadId: string, courseId: string, userId: string): Extracte
         type: 'exam',
         due_at: '2026-05-04T08:00:00',
         time_inferred: false,
+        time_basis: 'explicit',
       },
       confidence: 'high',
       status: 'pending',
@@ -259,75 +271,44 @@ function seedItems(uploadId: string, courseId: string, userId: string): Extracte
 }
 
 export const mockAdapter: SyllabusPipelinePort = {
-  async processUpload({ courseId, userId, onProgress }) {
-    const uploadId = `mock-${crypto.randomUUID()}`;
+  async processUploads({ files, courseId, userId, onProgress }) {
+    const uploadIds = files.map(() => mockId());
 
-    onProgress('uploading', 'Uploading file…');
+    onProgress('uploading', `Uploading ${files.length} file(s)…`);
     await delay(600);
 
-    onProgress('extracting', 'Extracting text from file…');
-    await delay(800);
+    onProgress('processing', 'Reading your syllabus…');
+    await delay(1500);
 
-    onProgress('processing', 'Analyzing syllabus…');
-    await delay(1000);
-
-    const items = seedItems(uploadId, courseId, userId);
+    const items = seedItems(uploadIds[0], courseId, userId);
+    const summary: ExtractionSummary = {
+      course: { code: 'CS 301', title: 'Data Structures and Algorithms', term: 'Spring 2026', term_start_date: null, term_end_date: null },
+      rules: [{ text: 'Reading quizzes are due before each Monday lecture.', applies_to: 'quiz' }],
+      warnings: ['The syllabus says weekly lab assignments are posted on the course site, which was not provided.'],
+      upload_ids: uploadIds,
+      model: 'mock',
+      usage: { input_tokens: 0, output_tokens: 0 },
+      duration_ms: 1500,
+      extracted_at: new Date().toISOString(),
+    };
+    for (const id of uploadIds) summaries.set(id, summary);
 
     onProgress('ready', `Found ${items.length} items. Ready for review!`);
-    return {
-      uploadId,
-      courseId,
-      createdCount: items.length,
-      parserStats: {
-        blocks_total: 8,
-        assignment_candidate_blocks: 3,
-        meeting_candidate_blocks: 1,
-        professor_candidate_blocks: 1,
-        heuristic_items: 6,
-        llm_items: 6,
-        normalized_items: items.length,
-        merged_items: items.length,
-        openai_used: true,
-        openai_error: null,
-      },
-      diagnostics: {
-        warnings: [],
-        openaiError: null,
-        quality: 'good',
-      },
-    };
+    return { uploadIds, courseId, createdCount: items.length, summary };
   },
 
-  async processUploads({ files, courseId, userId, onProgress }) {
-    const results: ProcessResult[] = [];
-    for (let i = 0; i < files.length; i += 1) {
-      const result = await mockAdapter.processUpload({
-        file: files[i],
-        courseId,
-        userId,
-        onProgress: (step, message) => onProgress(step, `${i + 1}/${files.length} ${message || ''}`.trim()),
-      });
-      results.push(result);
-    }
-    return {
-      uploadIds: results.map(r => r.uploadId),
-      courseId,
-      createdCount: results.reduce((sum, r) => sum + r.createdCount, 0),
-      results,
-    } satisfies BatchProcessResult;
-  },
-
-  async fetchExtractedItems(uploadId) {
+  async fetchExtractedItems(uploadIds) {
     await delay(300);
-    const ids = Array.isArray(uploadId) ? uploadId : [uploadId];
-    return ids.flatMap(id => (store.get(id) || []).filter(i => i.status === 'pending'));
+    return uploadIds.flatMap(id => (store.get(id) || []).filter(i => i.status === 'pending'));
+  },
+
+  async fetchExtractionSummary(uploadIds) {
+    return uploadIds.map(id => summaries.get(id)).find(Boolean) ?? null;
   },
 
   async acceptItem(item) {
     await delay(200);
-    const items = store.get(item.syllabus_upload_id);
-    if (!items) return;
-    const target = items.find(i => i.id === item.id);
+    const target = store.get(item.syllabus_upload_id)?.find(i => i.id === item.id);
     if (target) {
       target.status = 'accepted';
       target.reviewed_at = new Date().toISOString();
@@ -357,4 +338,4 @@ export const mockAdapter: SyllabusPipelinePort = {
       }
     }
   },
-} as SyllabusPipelinePort;
+};

@@ -23,7 +23,8 @@ browser ──upload──▶ Supabase Storage (syllabi/<user>/...)
                     with a strict JSON schema for the output
                  3. validate dates/times, drop duplicates, convert local times
                     to UTC using the student's timezone
-                 4. write extracted_items (status: pending)
+                 4. write extracted_items (status: pending) and the course-level
+                    summary (rules, warnings) to syllabus_uploads.extraction
    ◀── review screen: accept → assignments / course_meetings / courses
 ```
 
@@ -34,8 +35,8 @@ Claude reads the whole document, including tables and calendar grids, in one cal
 | Area | State |
 |---|---|
 | Auth (email + Google), onboarding, dashboard, calendar, courses | Working |
-| Claude extractor (`extract/`) + benchmark | Built; being tuned on real syllabi |
-| `process-syllabus` edge function | Still runs the previous regex + OpenAI parser; switching to the Claude extractor next |
+| Claude extractor (`extract/`) + benchmark | Built; 100% recall/precision on the 4-course benchmark |
+| `process-syllabus` edge function | Runs the Claude extractor on all of a course's files in one call |
 | Sylli (AI assistant chat) | Paused; edge functions are stubs |
 | Reminders / notifications | Tables exist; nothing schedules reminders yet |
 
@@ -59,6 +60,8 @@ src/
 supabase/
   migrations/            database schema, applied with `supabase db push`
   functions/process-syllabus/
+    index.ts             HTTP handler: auth, download, extract, write rows
+    rows.ts              maps the extraction to extracted_items rows
     extract/             Claude extractor: schema, prompt, API call, post-processing
 eval/                    benchmark runner and scorer for the extractor
 Benchmark/               (gitignored) your syllabi, answer keys, and run outputs
@@ -113,7 +116,7 @@ cd eval
 deno task eval --estimate                                # input token counts, free
 deno task eval                                           # default model config, all courses
 deno task eval --configs opus5-medium,sonnet5-medium,haiku45 --cases ma261
-deno test ../supabase/functions/process-syllabus/extract/ .   # unit tests
+deno test ../supabase/functions/process-syllabus/ .   # unit tests
 ```
 
 Each run reports recall (required items found), precision, type and time accuracy, invented times, meetings, contacts, and actual cost, then lists every miss, extra item and wrong time.

@@ -4,9 +4,11 @@ export { realAdapter } from './realAdapter';
 export type {
   SyllabusPipelinePort,
   ExtractedItem,
-  ProcessResult,
+  ExtractionSummary,
+  BatchProcessResult,
   UploadStep,
   ItemKind,
   Confidence,
   ItemStatus,
+  TimeBasis,
 } from './types';

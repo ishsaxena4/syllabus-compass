@@ -560,6 +560,7 @@ export type Database = {
         Row: {
           course_id: string | null
           created_at: string
+          extraction: Json | null
           file_mime: string | null
           file_name: string
           file_path: string
@@ -571,6 +572,7 @@ export type Database = {
         Insert: {
           course_id?: string | null
           created_at?: string
+          extraction?: Json | null
           file_mime?: string | null
           file_name: string
           file_path: string
@@ -582,6 +584,7 @@ export type Database = {
         Update: {
           course_id?: string | null
           created_at?: string
+          extraction?: Json | null
           file_mime?: string | null
           file_name?: string
           file_path?: string

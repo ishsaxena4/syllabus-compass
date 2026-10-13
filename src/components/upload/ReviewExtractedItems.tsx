@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Check, X, Pencil, Loader2, Sparkles,
-  Mail, Clock, BookOpen, CheckCircle2, AlertCircle,
+  Mail, Clock, BookOpen, CheckCircle2, AlertTriangle, CalendarX, Repeat, GraduationCap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,9 +16,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ASSIGNMENT_TYPES } from '@/types';
-import { usePipeline, type ExtractedItem } from '@/lib/pipeline';
+import { usePipeline, type ExtractedItem, type ExtractionSummary } from '@/lib/pipeline';
 import { getFriendlySupabaseErrorMessage } from '@/lib/runtimeConfig';
-import type { ParserStats, ProcessDiagnostics } from '@/lib/pipeline/types';
 
 const WEEKDAYS = [
   { value: 'mon', label: 'Mon' },
@@ -29,6 +28,14 @@ const WEEKDAYS = [
   { value: 'sat', label: 'Sat' },
   { value: 'sun', label: 'Sun' },
 ] as const;
+
+const MEETING_KIND_LABELS: Record<string, string> = {
+  lecture: 'Lecture',
+  recitation: 'Recitation',
+  lab: 'Lab',
+  office_hours: 'Office hours',
+  other: 'Meeting',
+};
 
 function ConfidenceBadge({ confidence }: { confidence: string }) {
   const colors: Record<string, string> = {
@@ -46,85 +53,76 @@ function ConfidenceBadge({ confidence }: { confidence: string }) {
   );
 }
 
-function formatDueAt(dueAt: string | null, timeInferred?: boolean): string {
-  if (!dueAt) return 'No date set';
-  try {
-    const d = new Date(dueAt);
-    const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    return `${date} at ${time}${timeInferred ? ' (inferred)' : ''}`;
-  } catch {
-    return dueAt;
+function formatDueAt(dueAt: string | null, endAt?: string | null): string {
+  if (!dueAt) return 'No date';
+  const d = new Date(dueAt);
+  if (Number.isNaN(d.getTime())) return dueAt;
+  const date = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const end = endAt ? new Date(endAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : null;
+  return `${date} at ${time}${end ? `–${end}` : ''}`;
+}
+
+// Where the due time came from, so the student knows which times to double-check.
+function timeBasisLabel(p: Record<string, any>): { text: string; warn: boolean } | null {
+  if (!p.due_at) return null;
+  if (p.edited) return { text: 'Edited by you', warn: false };
+  if (p.time_inferred) return { text: 'No time given; set to 11:59 PM', warn: true };
+  switch (p.time_basis) {
+    case 'explicit': return { text: 'Time stated with the item', warn: false };
+    case 'course_policy': return { text: 'Time from course policy', warn: false };
+    case 'meeting': return { text: 'Time from class meeting', warn: false };
+    default: return null;
   }
 }
 
+// datetime-local works in the browser's local time; due_at is stored as UTC.
+function toLocalInput(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function sortByDue(a: ExtractedItem, b: ExtractedItem): number {
+  const da = (a.payload as any)?.due_at || '';
+  const db = (b.payload as any)?.due_at || '';
+  return new Date(da).getTime() - new Date(db).getTime();
+}
+
 interface Props {
-  syllabusUploadId: string | string[];
+  syllabusUploadIds: string[];
 }
 
-const UPLOAD_DIAG_STORAGE_PREFIX = 'upload-diagnostics:';
-
-interface StoredUploadDiagnostics {
-  diagnostics: ProcessDiagnostics;
-  parserStats: ParserStats | null;
-}
-
-export function ReviewExtractedItems({ syllabusUploadId }: Props) {
+export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const pipeline = usePipeline();
   const queryClient = useQueryClient();
 
-  const uploadIds = Array.isArray(syllabusUploadId) ? syllabusUploadId : [syllabusUploadId];
   const [items, setItems] = useState<ExtractedItem[]>([]);
+  const [summary, setSummary] = useState<ExtractionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Record<string, any>>({});
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [acceptingAll, setAcceptingAll] = useState(false);
-  const [uploadDiagnostics, setUploadDiagnostics] = useState<StoredUploadDiagnostics | null>(null);
 
+  const idsKey = syllabusUploadIds.join(',');
   useEffect(() => {
     load();
-  }, [syllabusUploadId]);
-
-  useEffect(() => {
-    try {
-      const records = uploadIds
-        .map(id => sessionStorage.getItem(`${UPLOAD_DIAG_STORAGE_PREFIX}${id}`))
-        .filter(Boolean) as string[];
-
-      if (records.length === 0) {
-        setUploadDiagnostics(null);
-        return;
-      }
-
-      const parsed = records.map(raw => JSON.parse(raw) as StoredUploadDiagnostics);
-      const mergedWarnings = parsed.flatMap(p => p.diagnostics.warnings);
-      const quality = parsed.some(p => p.diagnostics.quality === 'empty')
-        ? 'empty'
-        : parsed.some(p => p.diagnostics.quality === 'degraded')
-          ? 'degraded'
-          : 'good';
-
-      setUploadDiagnostics({
-        diagnostics: {
-          warnings: mergedWarnings,
-          openaiError: parsed.map(p => p.diagnostics.openaiError).find(Boolean) || null,
-          quality,
-        },
-        parserStats: parsed[parsed.length - 1]?.parserStats || null,
-      });
-    } catch {
-      setUploadDiagnostics(null);
-    }
-  }, [syllabusUploadId, uploadIds.join(',')]);
+  }, [idsKey]);
 
   async function load() {
     setLoading(true);
     try {
-      const data = await pipeline.fetchExtractedItems(syllabusUploadId);
+      const [data, extraction] = await Promise.all([
+        pipeline.fetchExtractedItems(syllabusUploadIds),
+        pipeline.fetchExtractionSummary(syllabusUploadIds).catch(() => null),
+      ]);
       setItems(data);
+      setSummary(extraction);
     } catch (error) {
       toast.error(getFriendlySupabaseErrorMessage(error, 'Failed to load extracted items'));
       setItems([]);
@@ -133,11 +131,18 @@ export function ReviewExtractedItems({ syllabusUploadId }: Props) {
   }
 
   const assignments = items.filter(i => i.item_kind === 'assignment');
+  const dated = assignments.filter(i => (i.payload as any)?.due_at).sort(sortByDue);
+  const undated = assignments.filter(i => !(i.payload as any)?.due_at);
   const emails = items.filter(i => i.item_kind === 'professor_email');
   const meetings = items.filter(i => i.item_kind === 'meeting_time');
-  const highCount = items.filter(i => i.confidence === 'high').length;
-  const mediumCount = items.filter(i => i.confidence === 'medium').length;
-  const lowCount = items.filter(i => i.confidence === 'low').length;
+  // Only items that can be accepted as-is: dated assignments and complete meetings.
+  const autoAcceptable = items.filter(i => {
+    if (i.confidence !== 'high') return false;
+    const p = i.payload as any;
+    if (i.item_kind === 'assignment') return Boolean(p?.due_at) && !p?.time_inferred;
+    return true;
+  });
+  const reviewCount = items.filter(i => i.confidence !== 'high').length;
 
   function startEdit(item: ExtractedItem) {
     setEditingId(item.id);
@@ -201,10 +206,9 @@ export function ReviewExtractedItems({ syllabusUploadId }: Props) {
   }
 
   async function acceptAllHigh() {
-    const highItems = items.filter(i => i.confidence === 'high');
-    if (highItems.length === 0) return;
+    if (autoAcceptable.length === 0) return;
     setAcceptingAll(true);
-    for (const item of highItems) {
+    for (const item of autoAcceptable) {
       await accept(item);
     }
     setAcceptingAll(false);
@@ -214,82 +218,75 @@ export function ReviewExtractedItems({ syllabusUploadId }: Props) {
     const isEditing = editingId === item.id;
     const isBusy = busyIds.has(item.id);
     const p = item.payload as any;
-    const isHigh = item.confidence === 'high';
-    const parserReasons = Array.isArray(p?.parser_meta?.confidence_reasons)
-      ? (p.parser_meta.confidence_reasons as string[])
-      : [];
-    const topReasons = parserReasons.slice(0, 3);
+    const basis = item.item_kind === 'assignment' ? timeBasisLabel(p) : null;
+    const meetingKind = item.item_kind === 'meeting_time' ? MEETING_KIND_LABELS[p?.kind] : null;
 
     return (
-      <div
-        key={item.id}
-        className={cn(
-          'card-elevated p-4 transition-all',
-          isHigh && 'ring-1 ring-green-500/20',
-        )}
-      >
+      <div key={item.id} className="card-elevated p-4 transition-all">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h4 className="text-sm font-medium truncate max-w-[280px]">{item.title}</h4>
               <ConfidenceBadge confidence={item.confidence} />
-              {isHigh && (
-                <span className="text-[10px] font-medium text-green-600 bg-green-50 dark:bg-green-900/20 dark:text-green-400 px-1.5 py-0.5 rounded-full flex items-center gap-1">
-                  <Sparkles className="w-3 h-3" /> Auto-confirm suggested
-                </span>
-              )}
             </div>
-
-          {(p?.parser_context?.file_name || p?.parser_context?.source_file_name) && (
-            <p className="text-[11px] text-muted-foreground mt-1">
-              Source: {String(p.parser_context.file_name || p.parser_context.source_file_name)}
-            </p>
-          )}
 
             {item.item_kind === 'assignment' && (
               <p className="text-xs text-muted-foreground mt-1">
-                Type: {p.type} &middot; {formatDueAt(p.due_at, p.time_inferred)}
+                {ASSIGNMENT_TYPES.find(t => t.value === p.type)?.label ?? p.type}
+                {' '}&middot; {formatDueAt(p.due_at, p.end_at)}
+              </p>
+            )}
+            {basis && (
+              <p className={cn(
+                'text-[11px] mt-0.5 flex items-center gap-1',
+                basis.warn ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
+              )}>
+                <Clock className="w-3 h-3" /> {basis.text}
               </p>
             )}
             {item.item_kind === 'professor_email' && (
-              <p className="text-xs text-muted-foreground mt-1">{p.email}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {p.name ? `${p.name} · ` : ''}{p.email}
+              </p>
             )}
             {item.item_kind === 'meeting_time' && (
               <p className="text-xs text-muted-foreground mt-1">
-                {(p.days || []).map((d: string) => d.toUpperCase()).join('/')}{' '}
-                {p.start_time}–{p.end_time}
+                {meetingKind && `${meetingKind} · `}
+                {(p.days || []).length > 0
+                  ? (p.days || []).map((d: string) => d.charAt(0).toUpperCase() + d.slice(1)).join('/')
+                  : 'Days not stated'}{' '}
+                {p.start_time ? `${p.start_time}–${p.end_time ?? '?'}` : '· time not stated'}
                 {p.location && ` · ${p.location}`}
               </p>
             )}
 
-            {item.source_snippet && (
-              <p className="text-xs text-muted-foreground/70 mt-2 italic line-clamp-2">
-                &ldquo;{item.source_snippet}&rdquo;
+            {p?.ambiguity && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 flex items-start gap-1">
+                <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> {p.ambiguity}
               </p>
             )}
-            {!isHigh && topReasons.length > 0 && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                Needs review: {topReasons.join(', ')}
+            {item.source_snippet && (
+              <p className="text-xs text-muted-foreground/70 mt-2 italic line-clamp-3">
+                &ldquo;{item.source_snippet}&rdquo;
+                {p?.parser_context?.file_name && (
+                  <span className="not-italic"> &mdash; {p.parser_context.file_name}</span>
+                )}
               </p>
             )}
           </div>
 
           {!isEditing && (
             <div className="flex gap-1 shrink-0">
-              <Button
-                size="sm"
-                onClick={() => accept(item)}
-                disabled={isBusy || acceptingAll}
-              >
+              <Button size="sm" onClick={() => accept(item)} disabled={isBusy || acceptingAll}>
                 {isBusy
                   ? <Loader2 className="w-3 h-3 animate-spin" />
                   : <Check className="w-3 h-3 mr-1" />}
                 Accept
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => startEdit(item)} disabled={isBusy}>
+              <Button size="sm" variant="ghost" onClick={() => startEdit(item)} disabled={isBusy} aria-label="Edit">
                 <Pencil className="w-3 h-3" />
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => discard(item.id)} disabled={isBusy}>
+              <Button size="sm" variant="ghost" onClick={() => discard(item.id)} disabled={isBusy} aria-label="Discard">
                 <X className="w-3 h-3" />
               </Button>
             </div>
@@ -326,13 +323,15 @@ export function ReviewExtractedItems({ syllabusUploadId }: Props) {
                     <Label className="text-xs">Due date &amp; time</Label>
                     <Input
                       type="datetime-local"
-                      value={editData.due_at ? editData.due_at.substring(0, 16) : ''}
+                      value={toLocalInput(editData.due_at)}
                       onChange={e => {
                         const v = e.target.value;
                         setEditData(d => ({
                           ...d,
-                          due_at: v ? (v.length === 16 ? v + ':00' : v) : null,
+                          due_at: v ? new Date(v).toISOString() : null,
+                          end_at: null,
                           time_inferred: false,
+                          edited: true,
                         }));
                       }}
                     />
@@ -413,6 +412,85 @@ export function ReviewExtractedItems({ syllabusUploadId }: Props) {
     );
   }
 
+  function renderSection(
+    title: string,
+    icon: React.ReactNode,
+    list: ExtractedItem[],
+    description?: string,
+  ) {
+    if (list.length === 0) return null;
+    return (
+      <div className="space-y-3 animate-fade-up">
+        <div>
+          <div className="flex items-center gap-2">
+            {icon}
+            <h3 className="text-sm font-medium text-foreground">{title} ({list.length})</h3>
+          </div>
+          {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
+        </div>
+        {list.map(renderItemCard)}
+      </div>
+    );
+  }
+
+  function renderSummary() {
+    if (!summary) return null;
+    const { course, rules, warnings } = summary;
+    const courseLine = [course.code, course.title].filter(Boolean).join(' · ');
+    if (!courseLine && rules.length === 0 && warnings.length === 0) return null;
+
+    return (
+      <div className="space-y-3 animate-fade-up">
+        {warnings.length > 0 && (
+          <div className="card-elevated p-3 border border-amber-500/25 bg-amber-500/5">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-500 shrink-0" />
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">Check before you rely on this</p>
+                <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-1">
+                  {warnings.map((w, i) => <li key={i}>{w}</li>)}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {(courseLine || rules.length > 0) && (
+          <div className="card-elevated p-3 space-y-2">
+            {courseLine && (
+              <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                <GraduationCap className="w-4 h-4 text-muted-foreground" />
+                {courseLine}
+                {course.term && <span className="text-xs text-muted-foreground font-normal">{course.term}</span>}
+              </p>
+            )}
+            {rules.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                  <Repeat className="w-3 h-3" /> Recurring deadlines without listed dates
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  The syllabus describes these but never lists the dates, so they were not added.
+                  Add them yourself once you know the dates.
+                </p>
+                <ul className="text-xs text-muted-foreground list-disc pl-4 mt-1 space-y-0.5">
+                  {rules.map((r, i) => (
+                    <li key={i}>
+                      {r.text}
+                      <span className="text-muted-foreground/60">
+                        {' '}({ASSIGNMENT_TYPES.find(t => t.value === r.applies_to)?.label ?? r.applies_to})
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -423,15 +501,18 @@ export function ReviewExtractedItems({ syllabusUploadId }: Props) {
 
   if (items.length === 0) {
     return (
-      <div className="text-center py-16 space-y-4 animate-fade-up">
-        <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
-        <h2 className="text-lg font-semibold text-foreground">All items reviewed!</h2>
-        <p className="text-sm text-muted-foreground">
-          No more pending items for this upload.
-        </p>
-        <Button variant="outline" onClick={() => navigate('/upload')}>
-          Back to Upload
-        </Button>
+      <div className="space-y-6 max-w-2xl mx-auto">
+        <div className="text-center py-12 space-y-4 animate-fade-up">
+          <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
+          <h2 className="text-lg font-semibold text-foreground">Nothing left to review</h2>
+          <p className="text-sm text-muted-foreground">
+            There are no pending items for this upload.
+          </p>
+          <Button variant="outline" onClick={() => navigate('/upload')}>
+            Back to Upload
+          </Button>
+        </div>
+        {renderSummary()}
       </div>
     );
   }
@@ -447,97 +528,31 @@ export function ReviewExtractedItems({ syllabusUploadId }: Props) {
       <div className="text-center animate-fade-up">
         <h1 className="text-2xl font-semibold text-foreground">Review Extracted Items</h1>
         <p className="text-sm text-muted-foreground mt-2">
-          {items.length} item{items.length !== 1 ? 's' : ''} found &middot;{' '}
-          {highCount} high confidence
+          {items.length} item{items.length !== 1 ? 's' : ''} found
+          {reviewCount > 0 && <> &middot; {reviewCount} need a closer look</>}
         </p>
-        {(mediumCount > 0 || lowCount > 0) && (
-          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-            {mediumCount} medium and {lowCount} low confidence item(s) require careful review.
-          </p>
-        )}
       </div>
 
-      {uploadDiagnostics && (
-        <div className="card-elevated p-3 border border-amber-500/25 bg-amber-500/5 animate-fade-up">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 mt-0.5 text-amber-500" />
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">
-                Extraction health: {uploadDiagnostics.diagnostics.quality}
-              </p>
-              {uploadDiagnostics.diagnostics.warnings.length > 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  {uploadDiagnostics.diagnostics.warnings.join(' ')}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  No parser warnings reported for this upload.
-                </p>
-              )}
-              {uploadDiagnostics.parserStats && (
-                <p className="text-[11px] text-muted-foreground">
-                  Heuristic: {uploadDiagnostics.parserStats.heuristic_items}
-                  {' '}· LLM: {uploadDiagnostics.parserStats.llm_items}
-                  {' '}· Normalized: {uploadDiagnostics.parserStats.normalized_items}
-                  {' '}· Final: {uploadDiagnostics.parserStats.merged_items}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
+      {renderSummary()}
+
+      {autoAcceptable.length > 0 && (
+        <Button onClick={acceptAllHigh} disabled={acceptingAll} className="w-full" variant="outline">
+          {acceptingAll
+            ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            : <Sparkles className="w-4 h-4 mr-2" />}
+          Accept all high-confidence items with dates and times ({autoAcceptable.length})
+        </Button>
       )}
 
-      {highCount > 0 && (
-        <div className="animate-fade-up" style={{ animationDelay: '50ms' }}>
-          <Button
-            onClick={acceptAllHigh}
-            disabled={acceptingAll}
-            className="w-full"
-            variant="outline"
-          >
-            {acceptingAll
-              ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              : <Sparkles className="w-4 h-4 mr-2" />}
-            Accept All High-Confidence ({highCount})
-          </Button>
-        </div>
+      {renderSection('Assignments', <BookOpen className="w-4 h-4 text-muted-foreground" />, dated)}
+      {renderSection(
+        'No date yet',
+        <CalendarX className="w-4 h-4 text-muted-foreground" />,
+        undated,
+        'The documents mention these but give no date (TBA, set by the registrar, and so on). Add a date now, or accept them and fill it in later.',
       )}
-
-      {assignments.length > 0 && (
-        <div className="space-y-3 animate-fade-up" style={{ animationDelay: '100ms' }}>
-          <div className="flex items-center gap-2">
-            <BookOpen className="w-4 h-4 text-muted-foreground" />
-            <h3 className="text-sm font-medium text-foreground">
-              Assignments ({assignments.length})
-            </h3>
-          </div>
-          {assignments.map(renderItemCard)}
-        </div>
-      )}
-
-      {emails.length > 0 && (
-        <div className="space-y-3 animate-fade-up" style={{ animationDelay: '150ms' }}>
-          <div className="flex items-center gap-2">
-            <Mail className="w-4 h-4 text-muted-foreground" />
-            <h3 className="text-sm font-medium text-foreground">
-              Professor Email ({emails.length})
-            </h3>
-          </div>
-          {emails.map(renderItemCard)}
-        </div>
-      )}
-
-      {meetings.length > 0 && (
-        <div className="space-y-3 animate-fade-up" style={{ animationDelay: '200ms' }}>
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-muted-foreground" />
-            <h3 className="text-sm font-medium text-foreground">
-              Meeting Times ({meetings.length})
-            </h3>
-          </div>
-          {meetings.map(renderItemCard)}
-        </div>
-      )}
+      {renderSection('Meeting times', <Clock className="w-4 h-4 text-muted-foreground" />, meetings)}
+      {renderSection('Instructor email', <Mail className="w-4 h-4 text-muted-foreground" />, emails)}
     </div>
   );
 }

@@ -8,21 +8,15 @@ See README.md for what the app is, the architecture, and setup.
   - Benchmark: 4 real courses, 61 required items, 100% recall and precision, all due times correct, about $0.30 per course.
   - Sonnet 5 and Haiku 4.5 each misdated an exam from a calendar grid, so don't switch models without re-running the benchmark.
 - The benchmark lives in `eval/` (`cd eval && deno task eval`). Syllabi and answer keys are in gitignored `Benchmark/`. The Anthropic key is in gitignored `supabase/functions/.env`.
-- **The live `process-syllabus` edge function still runs the OLD regex + OpenAI parser** (`index.ts`, `pipeline.ts`, `heuristics.ts`, `normalize.ts`, `preprocess.ts`, `openai.ts`).
+- `process-syllabus` (code on this branch) runs the Claude extractor: `index.ts` takes `syllabus_upload_ids` + `student_notes` + `timezone`, runs as the calling user with the publishable key (`SUPABASE_PUBLISHABLE_KEYS`), writes `extracted_items`, and stores course info/rules/warnings in `syllabus_uploads.extraction` (migration `20261014000000`). Row mapping is in `rows.ts`. Re-running a batch replaces its pending items.
+- Frontend: the upload page stages files plus an optional notes box, uploads them all, then calls the function once. The review screen shows time basis, ambiguity, source quote, course rules/warnings, and an undated section. pdfjs/mammoth are gone from the client.
+- Instructor contacts become `professor_email` items (TAs are not imported). Office-hours meetings, when accepted, fill `courses.office_hours` instead of `course_meetings`.
 
-## Next task: wire the new extractor into the app
-1. Rewrite `process-syllabus/index.ts` to use `extract/`:
-   - Accept several `syllabus_upload_id`s for one course, plus `student_notes` and `timezone`.
-   - Download the files from the `syllabi` bucket, then run `extractSyllabus` → `cleanExtraction`.
-   - Write `extracted_items` rows (assignment / meeting_time / professor_email). Compute `due_at` as UTC with `localToUtcIso`. When an item has a date but no time, default to 23:59 and set `time_inferred: true`.
-   - Use only the new Supabase API keys (publishable/secret), not the legacy anon/service_role JWTs. After deploy, the user disables the legacy keys; one was exposed in an earlier session.
-   - Delete the old parser files and their tests, and the `openai` dependency.
-2. Frontend (`src/lib/pipeline/realAdapter.ts`, `src/pages/UploadPage.tsx`):
-   - Upload all of a course's files first, then make one function call for the batch.
-   - Drop client-side PDF/DOCX text extraction (pdfjs, mammoth), which also shrinks the bundle.
-   - Add an optional "anything we should know?" notes box (e.g. recitation time).
-3. Review screen (`src/components/upload/ReviewExtractedItems.tsx`): show the time basis (stated, policy, or meeting), the ambiguity notes, the source quote, the course rules and warnings, and undated items.
-4. Set the secret with `supabase secrets set ANTHROPIC_API_KEY=...`; the user runs this so the key never enters the chat. Then deploy and test end to end in the running app with a real syllabus from `Benchmark/Syllabi/`.
+## Next task: deploy and test end to end
+1. The user runs `supabase secrets set ANTHROPIC_API_KEY=...` so the key never enters the chat.
+2. `supabase db push` (adds `syllabus_uploads.extraction`), then `supabase functions deploy process-syllabus`, then `npm run supabase:types`.
+3. Test in the running app with a real syllabus from `Benchmark/Syllabi/` (try a two-file course such as MA 261 + `Schedule261.pages.pdf`).
+4. After it works, the user disables the legacy anon/service_role keys (one was exposed in an earlier session).
 5. Later:
    - Deploy the frontend to Vercel.
    - Configure Supabase auth redirect URLs.

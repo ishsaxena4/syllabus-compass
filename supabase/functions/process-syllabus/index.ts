@@ -1,178 +1,137 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { runHybridPipeline } from './pipeline.ts'
-import { extractTextFromImageWithOpenAI } from './openai.ts'
+// process-syllabus: reads all of one course's uploaded files with Claude and writes
+// the results to extracted_items (status pending) for the student to review.
+//
+// POST { syllabus_upload_ids: string[], student_notes?: string, timezone?: string }
+//
+// Runs entirely as the calling user (publishable key + their JWT), so row-level
+// security covers every read and write, including the storage downloads.
+import { createClient } from 'npm:@supabase/supabase-js@2'
+import { ExtractionError, extractSyllabus, type SourceDocument } from './extract/claude.ts'
+import { cleanExtraction, isValidTimeZone } from './extract/resolve.ts'
+import { buildItemRows, buildSummary } from './rows.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const MAX_FILES = 10
+const MAX_NOTES_LENGTH = 2000
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
+
+function publishableKey(): string {
+  const keys = JSON.parse(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS') ?? '{}') as Record<string, string>
+  const key = keys.default ?? Object.values(keys)[0]
+  if (!key) throw new Error('SUPABASE_PUBLISHABLE_KEYS is not set')
+  return key
+}
+
+// Today's date in the student's timezone, so the year and "next week" use their calendar.
+function todayIn(timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date())
+}
+
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
+  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
   try {
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401)
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } },
-    )
-
-    const { data: { user }, error: userErr } = await supabase.auth.getUser()
-    if (userErr || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const body = await req.json()
-    const { syllabus_upload_id, course_id, extracted_text, timezone } = body
-
-    if (!syllabus_upload_id || typeof syllabus_upload_id !== 'string') {
-      return new Response(JSON.stringify({ error: 'syllabus_upload_id is required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-    if (extracted_text !== null && extracted_text !== undefined && typeof extracted_text !== 'string') {
-      return new Response(JSON.stringify({ error: 'extracted_text must be a string when provided' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    // Verify upload ownership
-    const { data: upload, error: upErr } = await supabase
-      .from('syllabus_uploads')
-      .select('*')
-      .eq('id', syllabus_upload_id)
-      .single()
-
-    if (upErr || !upload) {
-      return new Response(JSON.stringify({ error: 'Syllabus upload not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-    if (upload.user_id !== user.id) {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    let effectiveExtractedText = typeof extracted_text === 'string' ? extracted_text : ''
-
-    if (!effectiveExtractedText.trim() && typeof upload.file_mime === 'string' && upload.file_mime.startsWith('image/')) {
-      const { data: imageBlob, error: imageErr } = await supabase.storage
-        .from('syllabi')
-        .download(upload.file_path)
-      if (imageErr || !imageBlob) {
-        return new Response(JSON.stringify({ error: 'Could not download image for OCR' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
-
-      const bytes = new Uint8Array(await imageBlob.arrayBuffer())
-      try {
-        effectiveExtractedText = await extractTextFromImageWithOpenAI({
-          bytes,
-          mimeType: upload.file_mime || 'image/png',
-        })
-      } catch (ocrError) {
-        return new Response(
-          JSON.stringify({ error: ocrError instanceof Error ? ocrError.message : 'Image OCR failed' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        )
-      }
-    }
-
-    if (!effectiveExtractedText.trim()) {
-      return new Response(JSON.stringify({ error: 'No text could be extracted from this upload' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    // Truncate very large texts for predictable cost/perf.
-    const MAX_LEN = 200_000
-    const rawText =
-      effectiveExtractedText.length > MAX_LEN
-        ? effectiveExtractedText.substring(0, MAX_LEN) + '\n\n[TRUNCATED]'
-        : effectiveExtractedText
-
-    await supabase
-      .from('syllabus_uploads')
-      .update({ raw_text: rawText, processed_at: new Date().toISOString() })
-      .eq('id', syllabus_upload_id)
-
-    const effectiveCourseId = course_id || upload.course_id
-
-    const referenceYear = new Date(upload.created_at || Date.now()).getUTCFullYear()
-    const pipelineResult = await runHybridPipeline({
-      rawText,
-      referenceYear,
-      timezone: typeof timezone === 'string' ? timezone : 'UTC',
-      supabase,
-      syllabus_upload_id,
-      user_id: user.id,
-      course_id: effectiveCourseId,
-      source_file_name: upload.file_name,
-      source_file_id: upload.id,
+    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, publishableKey(), {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false },
     })
+    const { data: { user }, error: userErr } = await supabase.auth.getUser(authHeader.slice('Bearer '.length))
+    if (userErr || !user) return json({ error: 'Unauthorized' }, 401)
 
-    let created_count = 0
-    if (pipelineResult.insertRows.length > 0) {
-      const { data: inserted, error: insErr } = await supabase
-        .from('extracted_items')
-        .insert(pipelineResult.insertRows)
-        .select()
+    const body = await req.json().catch(() => null)
+    const ids: unknown = body?.syllabus_upload_ids
+    if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_FILES || !ids.every(id => typeof id === 'string')) {
+      return json({ error: `syllabus_upload_ids must be a list of 1 to ${MAX_FILES} upload ids` }, 400)
+    }
+    const uploadIds = [...new Set(ids as string[])]
+    const notes = typeof body.student_notes === 'string' ? body.student_notes.trim().slice(0, MAX_NOTES_LENGTH) : ''
+    const timezone = typeof body.timezone === 'string' && isValidTimeZone(body.timezone) ? body.timezone : 'UTC'
 
-      if (insErr) {
-        return new Response(
-          JSON.stringify({ error: `Insert failed: ${insErr.message}` }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        )
-      }
-      created_count = inserted?.length || 0
+    const { data: uploadRows, error: upErr } = await supabase
+      .from('syllabus_uploads')
+      .select('id, user_id, course_id, file_name, file_mime, file_path')
+      .in('id', uploadIds)
+    if (upErr) return json({ error: `Could not load uploads: ${upErr.message}` }, 500)
+    if (!uploadRows || uploadRows.length !== uploadIds.length || uploadRows.some(u => u.user_id !== user.id)) {
+      return json({ error: 'One or more uploads were not found' }, 404)
+    }
+    const courseId = uploadRows[0].course_id
+    if (!courseId || uploadRows.some(u => u.course_id !== courseId)) {
+      return json({ error: 'All uploads must belong to the same course' }, 400)
+    }
+    // Keep the order the client uploaded them in, so document numbers are stable.
+    const uploads = uploadIds.map(id => uploadRows.find(u => u.id === id)!)
+
+    const { data: course } = await supabase.from('courses').select('name, section').eq('id', courseId).single()
+
+    const documents: SourceDocument[] = []
+    for (const upload of uploads) {
+      const { data: blob, error: dlErr } = await supabase.storage.from('syllabi').download(upload.file_path)
+      if (dlErr || !blob) return json({ error: `Could not download ${upload.file_name}` }, 400)
+      documents.push({
+        name: upload.file_name,
+        mimeType: upload.file_mime || blob.type,
+        bytes: new Uint8Array(await blob.arrayBuffer()),
+      })
     }
 
-    const diagnostics = {
-      empty_result: created_count === 0,
-      openai_error_present: Boolean(pipelineResult.stats.openai_error),
-      normalization_dropoff:
-        pipelineResult.stats.heuristic_items > 0 && pipelineResult.stats.normalized_items === 0,
+    const run = await extractSyllabus({
+      documents,
+      context: {
+        courseName: course ? [course.name, course.section].filter(Boolean).join(' ') : null,
+        studentNotes: notes || null,
+        referenceDate: todayIn(timezone),
+        timezone,
+      },
+    })
+    const extraction = cleanExtraction(run.extraction, documents.length)
+    const rows = buildItemRows(extraction, { userId: user.id, courseId, timezone, uploads })
+    const summary = buildSummary(extraction, run, uploadIds)
+
+    // Re-running a batch replaces its unreviewed items instead of duplicating them.
+    const { error: delErr } = await supabase
+      .from('extracted_items')
+      .delete()
+      .in('syllabus_upload_id', uploadIds)
+      .eq('status', 'pending')
+    if (delErr) return json({ error: `Could not clear previous items: ${delErr.message}` }, 500)
+
+    if (rows.length > 0) {
+      const { error: insErr } = await supabase.from('extracted_items').insert(rows)
+      if (insErr) return json({ error: `Insert failed: ${insErr.message}` }, 500)
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        created_count,
-        syllabus_upload_id,
-        course_id: effectiveCourseId,
-        parser_version: 'hybrid-v1',
-        parser_stats: pipelineResult.stats,
-        diagnostics,
-        review_url_hint: `/upload?review=${syllabus_upload_id}`,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    )
+    const { error: sumErr } = await supabase
+      .from('syllabus_uploads')
+      .update({ extraction: summary, processed_at: summary.extracted_at })
+      .in('id', uploadIds)
+    if (sumErr) return json({ error: `Could not save extraction summary: ${sumErr.message}` }, 500)
+
+    return json({
+      ok: true,
+      created_count: rows.length,
+      syllabus_upload_ids: uploadIds,
+      course_id: courseId,
+      extraction: summary,
+    })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    if (err instanceof ExtractionError) return json({ error: err.message }, 422)
+    console.error(err)
+    return json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500)
   }
 })
