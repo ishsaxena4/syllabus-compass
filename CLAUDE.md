@@ -15,9 +15,8 @@ See README.md for what the app is, the architecture, and setup.
 - Deployed and tested end to end on 2026-10-13 with MA 261 (syllabus + schedule): all homeworks, quizzes, midterms, recitation, office hours and email extracted; review pre-selects everything except the undated final and the lecture with no end time.
 
 ## Next tasks
-1. The user disables the legacy anon/service_role keys in the Supabase dashboard (one was exposed in an earlier session). Nothing in the app uses them.
-2. Optionally remove the now-unused `OPENAI_API_KEY` and `LOVABLE_API_KEY` function secrets.
-3. Later:
+- Done 2026-10-13: legacy anon/service_role keys disabled; `OPENAI_API_KEY` and `LOVABLE_API_KEY` secrets removed.
+1. Remaining:
    - Deploy the frontend to Vercel.
    - Configure Supabase auth redirect URLs.
    - Fix `v_today`, which uses UTC `CURRENT_DATE`.
