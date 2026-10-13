@@ -6,6 +6,7 @@ See README.md for what the app is, the architecture, and setup.
 - Supabase project `olkriduceflppgxmeghr` is live and linked (`supabase db push` works from the repo). The migration history is in sync.
 - The Claude extractor in `supabase/functions/process-syllabus/extract/` is done and benchmarked. The chosen model is **Claude Opus 5 at medium effort** (`DEFAULT_MODEL` in `extract/claude.ts`).
   - Benchmark: 4 real courses, 61 required items, 100% recall and precision, all due times correct, about $0.30 per course.
+  - Confidence means "is the date/time right", not "how many sources"; `ambiguity` is only for real doubts about the date/time. Before this rule, every item got a caveat and nothing was pre-selected in review. After it (run 2026-10-13T22-27-17), only the 4 undated items of 63 are flagged.
   - Sonnet 5 and Haiku 4.5 each misdated an exam from a calendar grid, so don't switch models without re-running the benchmark.
 - The benchmark lives in `eval/` (`cd eval && deno task eval`). Syllabi and answer keys are in gitignored `Benchmark/`. The Anthropic key is in gitignored `supabase/functions/.env`.
 - `process-syllabus` (code on this branch) runs the Claude extractor: `index.ts` takes `syllabus_upload_ids` + `student_notes` + `timezone`, runs as the calling user with the publishable key (`SUPABASE_PUBLISHABLE_KEYS`), writes `extracted_items`, and stores course info/rules/warnings in `syllabus_uploads.extraction` (migration `20261014000000`). Row mapping is in `rows.ts`. Re-running a batch replaces its pending items.

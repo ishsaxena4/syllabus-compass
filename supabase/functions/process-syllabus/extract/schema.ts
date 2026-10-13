@@ -115,7 +115,7 @@ export const EXTRACTION_SCHEMA = object({
       available_from_date: date,
       available_from_time: time,
       confidence: { type: 'string', enum: CONFIDENCES },
-      ambiguity: { type: ['string', 'null'], description: 'What a student should double-check, or null' },
+      ambiguity: { type: ['string', 'null'], description: 'A specific doubt about this date or time, or null' },
       source_quote: { type: 'string' },
       source_document: { type: 'integer', description: '1-based index of the document the item came from' },
     }),

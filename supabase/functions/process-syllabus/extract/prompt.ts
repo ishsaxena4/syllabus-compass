@@ -38,7 +38,8 @@ For exams and other timed events, due_time is the start and end_time is the end.
 - contacts: instructors and TAs with email addresses as written.
 - rules: only recurring deadline patterns whose individual dates are not listed (e.g. "quizzes due Fridays", "homework due Tuesdays at midnight"). General policies (grading weights, late penalties, exam materials, AI use) are not rules; leave them out.
 - source_quote: a short verbatim snippet from the document that supports the item.
-- confidence: high when the date and time are stated plainly; medium when you combined information across places (calendar date plus policy time); low when you had to interpret something unclear.
+- confidence is about whether the date and time are right, not how many places you read: high when both follow directly from the documents (including a calendar date combined with a stated course policy or a known meeting time); medium when you made a reasonable interpretation the student should glance at; low when the date or time is unclear, missing, or a guess.
+- ambiguity: null unless there is a specific doubt that could make this item's date or time wrong (conflicting sources, an unclear table cell, a weekday that does not match the date, a missing date). Do not use it to restate time_basis, to suggest confirming in an LMS, or to note missing details that do not affect the deadline (end time, room).
 - warnings: anything the student should know about the extraction as a whole, such as a schedule that lives elsewhere (a website or LMS) and was not provided.`
 
 export interface ExtractionContext {
