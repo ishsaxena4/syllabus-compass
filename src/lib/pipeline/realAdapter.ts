@@ -2,6 +2,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { isAssignmentType } from '@/types';
 import { canAcceptItem } from './review';
+import { formatClockRange } from '@/lib/time';
 import type {
   BatchProcessResult,
   ExtractionSummary,
@@ -48,7 +49,7 @@ const DAY_LETTERS: Record<string, string> = {
 
 function describeMeeting(p: Record<string, any>): string {
   const days = (p.days || []).map((d: string) => DAY_LETTERS[d] || d).join('');
-  const times = p.start_time ? `${p.start_time}${p.end_time ? `–${p.end_time}` : ''}` : '';
+  const times = formatClockRange(p.start_time, p.end_time);
   return [[days, times].filter(Boolean).join(' '), p.location].filter(Boolean).join(' · ');
 }
 
@@ -130,7 +131,7 @@ export const realAdapter: SyllabusPipelinePort = {
     return (data?.[0]?.extraction ?? null) as unknown as ExtractionSummary | null;
   },
 
-  async acceptItems(items, userId) {
+  async acceptItems(items, userId, options) {
     const blocked = items.find(i => !canAcceptItem(i));
     if (blocked) {
       throw new Error(
@@ -143,8 +144,10 @@ export const realAdapter: SyllabusPipelinePort = {
     const isOfficeHours = (i: ExtractedItem) => i.item_kind === 'meeting_time' && payloadOf(i).kind === 'office_hours';
 
     // Assignments and meetings go in one insert each; course fields are per course.
+    const now = Date.now();
     const assignments = items.filter(i => i.item_kind === 'assignment').map(i => {
       const p = payloadOf(i);
+      const isPast = Boolean(p.due_at) && new Date(p.due_at).getTime() < now;
       return {
         user_id: userId,
         course_id: i.course_id!,
@@ -152,7 +155,7 @@ export const realAdapter: SyllabusPipelinePort = {
         type: isAssignmentType(p.type) ? p.type : 'other',
         due_at: p.due_at || null,
         notes: p.ambiguity || null,
-        status: 'upcoming' as const,
+        status: options?.markPastDone && isPast ? ('completed' as const) : ('upcoming' as const),
         confirmed: true,
         confidence: i.confidence,
         source_snippet: i.source_snippet,

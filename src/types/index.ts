@@ -33,13 +33,16 @@ export function isAssignmentType(value: unknown): value is AssignmentType {
   return ASSIGNMENT_TYPES.some(t => t.value === value);
 }
 
+export type AssignmentStatus = 'upcoming' | 'due-soon' | 'overdue' | 'completed';
+
 export interface Assignment {
   id: string;
   title: string;
   courseId: string;
   type: AssignmentType;
-  dueDate: Date;
-  status: 'upcoming' | 'due-soon' | 'completed';
+  // null when the syllabus gives no date (e.g. a final exam set by the registrar).
+  dueDate: Date | null;
+  status: AssignmentStatus;
   notes?: string;
   confidence?: 'high' | 'medium' | 'low';
 }

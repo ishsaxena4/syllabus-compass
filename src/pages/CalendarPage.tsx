@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { CoursePill } from '@/components/shared/CoursePill';
 import { cn } from '@/lib/utils';
 import { useLiveAssignments, useLiveCourses } from '@/hooks/useAcademicData';
+import { byDueDate, isOpen } from '@/lib/assignments';
 
 type ViewMode = 'month' | 'agenda';
 
@@ -22,7 +23,7 @@ export default function CalendarPage() {
   const getCourse = (courseId: string) => courses.find((c) => c.id === courseId);
   
   const getAssignmentsForDay = (date: Date) => 
-    assignments.filter((a) => isSameDay(a.dueDate, date));
+    assignments.filter((a) => a.dueDate && isSameDay(a.dueDate, date));
 
   const firstDayOfWeek = monthStart.getDay();
   const paddingDays = Array(firstDayOfWeek).fill(null);
@@ -149,7 +150,7 @@ export default function CalendarPage() {
                       return (
                         <div
                           key={assignment.id}
-                          className="text-xs p-1 rounded truncate"
+                          className={cn('text-xs p-1 rounded truncate', assignment.status === 'completed' && 'line-through opacity-50')}
                           style={{ 
                             backgroundColor: `hsl(var(--course-${course.color}) / 0.15)`,
                             color: `hsl(var(--course-${course.color}))`
@@ -177,10 +178,11 @@ export default function CalendarPage() {
           </h2>
           <div className="space-y-3">
             {assignments
-              .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
+              .filter((a) => isOpen(a) && a.dueDate)
+              .sort(byDueDate)
               .map((assignment) => {
                 const course = getCourse(assignment.courseId);
-                if (!course) return null;
+                if (!course || !assignment.dueDate) return null;
 
                 return (
                   <div

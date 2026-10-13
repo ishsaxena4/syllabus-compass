@@ -4,6 +4,7 @@ import { Assignment } from "@/types";
 import { format, isSameDay } from "date-fns";
 import { AssignmentTypeIcon } from "@/components/shared/AssignmentTypeIcon";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { CompleteToggle } from "@/components/shared/CompleteToggle";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface CourseCalendarProps {
@@ -15,11 +16,14 @@ export function CourseCalendar({ assignments, courseColor }: CourseCalendarProps
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
 
   // Memoize to avoid recalculating on every render
-  const assignmentDates = useMemo(() => assignments.map((a) => a.dueDate), [assignments]);
+  const assignmentDates = useMemo(
+    () => assignments.flatMap((a) => (a.dueDate ? [a.dueDate] : [])),
+    [assignments],
+  );
 
   const selectedDateAssignments = useMemo(() => {
     if (!selectedDate) return [];
-    return assignments.filter((a) => isSameDay(a.dueDate, selectedDate));
+    return assignments.filter((a) => a.dueDate && isSameDay(a.dueDate, selectedDate));
   }, [assignments, selectedDate]);
 
   const modifiers = {
@@ -121,6 +125,7 @@ export function CourseCalendar({ assignments, courseColor }: CourseCalendarProps
                     transition={{ delay: index * 0.05, duration: 0.2 }}
                     whileHover={{ scale: 1.01 }}
                   >
+                    <CompleteToggle assignment={assignment} />
                     <div
                       className="w-1 h-10 rounded-full shrink-0"
                       style={{ backgroundColor: `hsl(var(--course-${courseColor}))` }}
@@ -132,7 +137,7 @@ export function CourseCalendar({ assignments, courseColor }: CourseCalendarProps
                       <div className="flex items-center gap-2 mt-1">
                         <AssignmentTypeIcon type={assignment.type} />
                         <span className="text-xs text-muted-foreground">
-                          Due at {format(assignment.dueDate, "h:mm a")}
+                          Due at {assignment.dueDate && format(assignment.dueDate, "h:mm a")}
                         </span>
                       </div>
                     </div>

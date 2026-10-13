@@ -2,6 +2,7 @@ import { format, isToday, isTomorrow } from 'date-fns';
 import { Clock, Check } from 'lucide-react';
 import { Assignment, Course } from '@/types';
 import { CoursePill } from '@/components/shared/CoursePill';
+import { byDueDate, dueWithin } from '@/lib/assignments';
 
 interface TodaySectionProps {
   assignments: Assignment[];
@@ -11,9 +12,9 @@ interface TodaySectionProps {
 export function TodaySection({ assignments, courses }: TodaySectionProps) {
   const getCourse = (courseId: string) => courses.find((c) => c.id === courseId);
 
-  const todayAssignments = assignments.filter(
-    (a) => isToday(a.dueDate) || isTomorrow(a.dueDate)
-  );
+  const todayAssignments = assignments
+    .filter((a) => dueWithin(a, 1))
+    .sort(byDueDate);
 
   if (todayAssignments.length === 0) {
     return (
@@ -44,7 +45,7 @@ export function TodaySection({ assignments, courses }: TodaySectionProps) {
       <div className="space-y-2">
         {todayAssignments.map((assignment) => {
           const course = getCourse(assignment.courseId);
-          if (!course) return null;
+          if (!course || !assignment.dueDate) return null;
 
           return (
             <div

@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 
-type Status = 'upcoming' | 'due-soon' | 'completed' | 'attention';
+type Status = 'upcoming' | 'due-soon' | 'overdue' | 'completed' | 'attention';
 
 interface StatusBadgeProps {
   status: Status;
@@ -10,7 +10,8 @@ interface StatusBadgeProps {
 const statusConfig: Record<Status, { label: string; className: string }> = {
   upcoming: { label: 'Upcoming', className: 'status-upcoming' },
   'due-soon': { label: 'Due Soon', className: 'status-due-soon' },
-  completed: { label: 'Completed', className: 'status-completed' },
+  overdue: { label: 'Past due', className: 'status-attention' },
+  completed: { label: 'Done', className: 'status-completed' },
   attention: { label: 'Needs Review', className: 'status-attention' },
 };
 

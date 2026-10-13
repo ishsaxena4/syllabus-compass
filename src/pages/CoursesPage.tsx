@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { ChevronRight, Mail, Clock, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { format, isFuture } from 'date-fns';
+import { format } from 'date-fns';
+import { byDueDate, isOpen } from '@/lib/assignments';
+import { formatClock } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { AddCourseDialog } from '@/components/shared/AddCourseDialog';
 import { useDeleteCourse, useLiveAssignments, useLiveCourses } from '@/hooks/useAcademicData';
@@ -27,8 +29,8 @@ export default function CoursesPage() {
 
   const getNextDeadline = (courseId: string) => {
     const upcoming = assignments
-      .filter((a) => a.courseId === courseId && isFuture(a.dueDate))
-      .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())[0];
+      .filter((a) => a.courseId === courseId && isOpen(a) && a.dueDate)
+      .sort(byDueDate)[0];
     return upcoming;
   };
 
@@ -155,7 +157,7 @@ export default function CoursesPage() {
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Clock className="w-3.5 h-3.5" />
                         <span>
-                          {course.schedule.days.join(', ')} · {course.schedule.startTime}
+                          {course.schedule.days.join(', ')} · {formatClock(course.schedule.startTime)}
                         </span>
                       </div>
                     )}
@@ -171,7 +173,7 @@ export default function CoursesPage() {
                         <span className="font-medium">Next:</span>
                         <span className="truncate max-w-[150px]">{nextDeadline.title}</span>
                         <span>·</span>
-                        <span>{format(nextDeadline.dueDate, 'MMM d')}</span>
+                        <span>{nextDeadline.dueDate && format(nextDeadline.dueDate, 'MMM d')}</span>
                       </div>
                     )}
                   </div>

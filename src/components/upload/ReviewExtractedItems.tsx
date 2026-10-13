@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, Check, X, Pencil, Loader2,
+  ArrowLeft, Check, X, Pencil, Loader2, ChevronDown, ChevronRight, History,
   Mail, Clock, BookOpen, CheckCircle2, AlertTriangle, CalendarX, Repeat, GraduationCap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ import {
   attentionReason, canAcceptItem, usePipeline, type ExtractedItem, type ExtractionSummary,
 } from '@/lib/pipeline';
 import { getFriendlySupabaseErrorMessage } from '@/lib/runtimeConfig';
+import { formatClockRange } from '@/lib/time';
 
 const WEEKDAYS = [
   { value: 'mon', label: 'Mon' },
@@ -114,6 +115,8 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [acceptingSelected, setAcceptingSelected] = useState(false);
+  const [markPastDone, setMarkPastDone] = useState(true);
+  const [showPast, setShowPast] = useState(false);
 
   const idsKey = syllabusUploadIds.join(',');
   useEffect(() => {
@@ -140,11 +143,20 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
 
   const assignments = items.filter(i => i.item_kind === 'assignment');
   const dated = assignments.filter(i => (i.payload as any)?.due_at).sort(sortByDue);
+  // Mid-semester imports: anything already due is grouped and collapsed, and can be
+  // imported as done so it never shows up as a to-do.
+  const nowMs = Date.now();
+  const isPast = (i: ExtractedItem) => new Date((i.payload as any).due_at).getTime() < nowMs;
+  const upcomingDated = dated.filter(i => !isPast(i));
+  const pastDated = dated.filter(isPast);
   const undated = assignments.filter(i => !(i.payload as any)?.due_at);
   const emails = items.filter(i => i.item_kind === 'professor_email');
   const meetings = items.filter(i => i.item_kind === 'meeting_time');
   const flaggedCount = items.filter(i => attentionReason(i) !== null).length;
   const selectedItems = items.filter(i => selected.has(i.id));
+  const selectedPastCount = selectedItems.filter(
+    i => i.item_kind === 'assignment' && (i.payload as any)?.due_at && isPast(i),
+  ).length;
 
   function toggleSelected(ids: string[], on: boolean) {
     setSelected(prev => {
@@ -189,7 +201,7 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
     setBusyIds(prev => new Set([...prev, ...ids]));
 
     try {
-      await pipeline.acceptItems(toAccept, user.id);
+      await pipeline.acceptItems(toAccept, user.id, { markPastDone });
       setItems(prev => prev.filter(i => !ids.includes(i.id)));
       toggleSelected(ids, false);
       await Promise.all([
@@ -255,7 +267,7 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
           />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h4 className="text-sm font-medium truncate max-w-[280px]">{item.title}</h4>
+              <h4 className="text-sm font-medium truncate max-w-[280px]">{meetingKind ?? item.title}</h4>
               <StatusBadge confidence={item.confidence} reason={reason} />
             </div>
 
@@ -280,12 +292,13 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
             )}
             {item.item_kind === 'meeting_time' && (
               <p className="text-xs text-muted-foreground mt-1">
-                {meetingKind && `${meetingKind} · `}
-                {(p.days || []).length > 0
-                  ? (p.days || []).map((d: string) => d.charAt(0).toUpperCase() + d.slice(1)).join('/')
-                  : 'Days not stated'}{' '}
-                {p.start_time ? `${p.start_time}–${p.end_time ?? '?'}` : '· time not stated'}
-                {p.location && ` · ${p.location}`}
+                {[
+                  (p.days || []).length > 0
+                    ? (p.days || []).map((d: string) => d.charAt(0).toUpperCase() + d.slice(1)).join('/')
+                    : 'Days not stated',
+                  p.start_time ? formatClockRange(p.start_time, p.end_time) : 'Time not stated',
+                  p.location,
+                ].filter(Boolean).join(' · ')}
               </p>
             )}
 
@@ -446,6 +459,7 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
     icon: React.ReactNode,
     list: ExtractedItem[],
     description?: string,
+    collapse?: { open: boolean; onToggle: () => void },
   ) {
     if (list.length === 0) return null;
     const selectable = list.filter(canAcceptItem).map(i => i.id);
@@ -455,7 +469,18 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
         <div>
           <div className="flex items-center gap-2">
             {icon}
-            <h3 className="text-sm font-medium text-foreground">{title} ({list.length})</h3>
+            {collapse ? (
+              <button
+                type="button"
+                onClick={collapse.onToggle}
+                className="flex items-center gap-1 text-sm font-medium text-foreground hover:underline"
+              >
+                {title} ({list.length})
+                {collapse.open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
+            ) : (
+              <h3 className="text-sm font-medium text-foreground">{title} ({list.length})</h3>
+            )}
             {selectable.length > 0 && (
               <Button
                 size="sm"
@@ -469,7 +494,7 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
           </div>
           {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
         </div>
-        {list.map(renderItemCard)}
+        {(!collapse || collapse.open) && list.map(renderItemCard)}
       </div>
     );
   }
@@ -580,7 +605,16 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
         Everything not flagged is already selected. Check the flagged items, then accept the selection.
       </p>
 
-      {renderSection('Assignments', <BookOpen className="w-4 h-4 text-muted-foreground" />, dated)}
+      {renderSection('Assignments', <BookOpen className="w-4 h-4 text-muted-foreground" />, upcomingDated)}
+      {renderSection(
+        'Already past',
+        <History className="w-4 h-4 text-muted-foreground" />,
+        pastDated,
+        markPastDone
+          ? 'Due before today. These will be added as done so they stay off your to-do list.'
+          : 'Due before today. These will be added as past due.',
+        { open: showPast, onToggle: () => setShowPast(v => !v) },
+      )}
       {renderSection(
         'No date yet',
         <CalendarX className="w-4 h-4 text-muted-foreground" />,
@@ -591,8 +625,18 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
       {renderSection('Instructor email', <Mail className="w-4 h-4 text-muted-foreground" />, emails)}
 
       {selected.size > 0 && (
-        <div className="sticky bottom-4 z-10 card-elevated p-3 flex items-center gap-3 shadow-lg border border-border">
+        <div className="sticky bottom-4 z-10 card-elevated p-3 flex flex-wrap items-center gap-x-3 gap-y-2 shadow-lg border border-border">
           <span className="text-sm text-foreground">{selectedItems.length} selected</span>
+          {selectedPastCount > 0 && (
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+              <Checkbox
+                checked={markPastDone}
+                onCheckedChange={v => setMarkPastDone(v === true)}
+                disabled={acceptingSelected}
+              />
+              Mark {selectedPastCount} past item{selectedPastCount === 1 ? '' : 's'} as done
+            </label>
+          )}
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} disabled={acceptingSelected}>
             Clear
           </Button>

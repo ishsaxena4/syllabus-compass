@@ -35,9 +35,15 @@ const MEETING_LABELS: Record<ExtractedMeeting['kind'], string> = {
   lecture: 'Lecture', recitation: 'Recitation', lab: 'Lab', office_hours: 'Office hours', other: 'Meeting',
 }
 
+// "16:30" -> "4:30 PM"; the app never shows 24-hour times.
+export function formatClock(time: string): string {
+  const [h, m] = time.split(':').map(Number)
+  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
+}
+
 function meetingTitle(m: ExtractedMeeting): string {
   const days = m.days.map(d => DAY_LETTERS[d]).join('')
-  const times = m.start_time ? `${m.start_time}${m.end_time ? `–${m.end_time}` : ''}` : ''
+  const times = m.start_time ? `${formatClock(m.start_time)}${m.end_time ? ` – ${formatClock(m.end_time)}` : ''}` : ''
   return [MEETING_LABELS[m.kind], [days, times].filter(Boolean).join(' ')].filter(Boolean).join(' · ')
 }
 

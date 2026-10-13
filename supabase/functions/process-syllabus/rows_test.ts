@@ -1,5 +1,5 @@
 import { assertEquals } from 'jsr:@std/assert@1'
-import { buildItemRows } from './rows.ts'
+import { buildItemRows, formatClock } from './rows.ts'
 import type { Extraction, ExtractedItem } from './extract/schema.ts'
 
 const ctx = {
@@ -70,10 +70,14 @@ Deno.test('meetings with missing times are low confidence; only instructor email
   }), ctx)
   const meetings = rows.filter(r => r.item_kind === 'meeting_time')
   assertEquals(meetings.map(m => [m.title, m.confidence]), [
-    ['Lecture · MWF 10:30–11:20', 'high'],
+    ['Lecture · MWF 10:30 AM – 11:20 AM', 'high'],
     ['Recitation · R', 'low'],
   ])
   const emails = rows.filter(r => r.item_kind === 'professor_email')
   assertEquals(emails.map(e => e.payload.email), ['a@uni.edu'])
   assertEquals(emails[0].syllabus_upload_id, 'up-1')
+})
+
+Deno.test('formatClock uses 12-hour time', () => {
+  assertEquals(['00:05', '09:00', '12:00', '16:30', '23:59'].map(formatClock), ['12:05 AM', '9:00 AM', '12:00 PM', '4:30 PM', '11:59 PM'])
 })

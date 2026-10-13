@@ -69,7 +69,8 @@ export interface SyllabusPipelinePort {
   fetchExtractionSummary(uploadIds: string[]): Promise<ExtractionSummary | null>;
 
   // Accepts several items together; all-or-nothing per destination table.
-  acceptItems(items: ExtractedItem[], userId: string): Promise<void>;
+  // markPastDone imports assignments that are already past due as completed.
+  acceptItems(items: ExtractedItem[], userId: string, options?: { markPastDone?: boolean }): Promise<void>;
 
   discardItem(itemId: string): Promise<void>;
 
