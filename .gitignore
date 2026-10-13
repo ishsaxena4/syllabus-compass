@@ -32,3 +32,6 @@ dist-ssr
 # Supabase CLI local state
 supabase/.branches
 supabase/.temp
+
+# Benchmark syllabi (contain personal info) and eval outputs
+Benchmark/
