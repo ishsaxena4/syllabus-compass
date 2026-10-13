@@ -415,22 +415,8 @@ export type Database = {
             foreignKeyName: "notifications_assignment_id_fkey"
             columns: ["assignment_id"]
             isOneToOne: false
-            referencedRelation: "v_due_soon"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "notifications_assignment_id_fkey"
-            columns: ["assignment_id"]
-            isOneToOne: false
             referencedRelation: "v_risky_items"
             referencedColumns: ["entity_id"]
-          },
-          {
-            foreignKeyName: "notifications_assignment_id_fkey"
-            columns: ["assignment_id"]
-            isOneToOne: false
-            referencedRelation: "v_today"
-            referencedColumns: ["id"]
           },
         ]
       }
@@ -501,22 +487,8 @@ export type Database = {
             foreignKeyName: "reminder_jobs_assignment_id_fkey"
             columns: ["assignment_id"]
             isOneToOne: false
-            referencedRelation: "v_due_soon"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reminder_jobs_assignment_id_fkey"
-            columns: ["assignment_id"]
-            isOneToOne: false
             referencedRelation: "v_risky_items"
             referencedColumns: ["entity_id"]
-          },
-          {
-            foreignKeyName: "reminder_jobs_assignment_id_fkey"
-            columns: ["assignment_id"]
-            isOneToOne: false
-            referencedRelation: "v_today"
-            referencedColumns: ["id"]
           },
         ]
       }
@@ -608,33 +580,6 @@ export type Database = {
       }
     }
     Views: {
-      v_due_soon: {
-        Row: {
-          confidence:
-            | Database["public"]["Enums"]["extraction_confidence"]
-            | null
-          confirmed: boolean | null
-          course_color: string | null
-          course_id: string | null
-          course_name: string | null
-          due_at: string | null
-          id: string | null
-          notes: string | null
-          status: Database["public"]["Enums"]["assignment_status"] | null
-          title: string | null
-          type: Database["public"]["Enums"]["assignment_type"] | null
-          user_id: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "assignments_course_id_fkey"
-            columns: ["course_id"]
-            isOneToOne: false
-            referencedRelation: "courses"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       v_risky_items: {
         Row: {
           confidence:
@@ -648,37 +593,10 @@ export type Database = {
           entity_id: string | null
           entity_type: string | null
           label: string | null
-          notes: string | null
           last_updated_at: string | null
+          notes: string | null
           risk_reason: string | null
           source_snippet: string | null
-          type: Database["public"]["Enums"]["assignment_type"] | null
-          user_id: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "assignments_course_id_fkey"
-            columns: ["course_id"]
-            isOneToOne: false
-            referencedRelation: "courses"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      v_today: {
-        Row: {
-          confidence:
-            | Database["public"]["Enums"]["extraction_confidence"]
-            | null
-          confirmed: boolean | null
-          course_color: string | null
-          course_id: string | null
-          course_name: string | null
-          due_at: string | null
-          id: string | null
-          notes: string | null
-          status: Database["public"]["Enums"]["assignment_status"] | null
-          title: string | null
           type: Database["public"]["Enums"]["assignment_type"] | null
           user_id: string | null
         }
