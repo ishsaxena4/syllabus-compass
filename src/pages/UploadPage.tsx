@@ -16,15 +16,34 @@ import { usePipeline, type UploadStep } from '@/lib/pipeline';
 import { ReviewExtractedItems } from '@/components/upload/ReviewExtractedItems';
 import { AddCourseDialog } from '@/components/shared/AddCourseDialog';
 import type { Tables } from '@/integrations/supabase/types';
+import type { ProcessDiagnostics, ParserStats } from '@/lib/pipeline/types';
 
 const PIPELINE_LABELS: Record<UploadStep, string> = {
   idle: '',
   uploading: 'Uploading file…',
-  extracting: 'Extracting text from PDF…',
+  extracting: 'Extracting text from file…',
   processing: 'Analyzing syllabus…',
   ready: 'Ready for review!',
   error: 'Something went wrong',
 };
+
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const IMAGE_MIME_PREFIX = 'image/';
+
+function isSupportedSyllabusFile(file: File): boolean {
+  const lowerName = file.name.toLowerCase();
+  return (
+    file.type === 'application/pdf' ||
+    file.type === DOCX_MIME ||
+    file.type.startsWith(IMAGE_MIME_PREFIX) ||
+    lowerName.endsWith('.pdf') ||
+    lowerName.endsWith('.docx') ||
+    lowerName.endsWith('.png') ||
+    lowerName.endsWith('.jpg') ||
+    lowerName.endsWith('.jpeg') ||
+    lowerName.endsWith('.webp')
+  );
+}
 
 const DEMO_TEXT = `CS 301 - Data Structures and Algorithms
 Spring 2026
@@ -50,6 +69,40 @@ Reading: Chapter 12 Dynamic Programming - Due April 14, 2026
 Final Project Presentation - TBD (Week 15)
 Final Exam - May 4, 2026 at 8:00 AM`;
 
+const UPLOAD_DIAG_STORAGE_PREFIX = 'upload-diagnostics:';
+
+function friendlyOpenAIError(errorCode: string): string {
+  if (errorCode === 'OPENAI_QUOTA_EXCEEDED') {
+    return 'OpenAI quota exceeded. Using heuristic-only extraction.';
+  }
+  if (errorCode === 'OPENAI_AUTH_ERROR') {
+    return 'OpenAI authentication failed. Check API key configuration.';
+  }
+  if (errorCode === 'OPENAI_TEMPORARY_UNAVAILABLE') {
+    return 'OpenAI is temporarily unavailable. Please retry in a minute.';
+  }
+  if (errorCode.startsWith('OPENAI_DROPPED_UNGROUNDED_ITEMS:')) {
+    const count = errorCode.split(':')[1] || '?';
+    return `Dropped ${count} low-grounding LLM item(s).`;
+  }
+  return errorCode;
+}
+
+function persistUploadDiagnostics(
+  uploadId: string,
+  diagnostics: ProcessDiagnostics,
+  parserStats: ParserStats | null,
+) {
+  try {
+    sessionStorage.setItem(
+      `${UPLOAD_DIAG_STORAGE_PREFIX}${uploadId}`,
+      JSON.stringify({ diagnostics, parserStats }),
+    );
+  } catch {
+    // Ignore storage errors; upload flow should continue.
+  }
+}
+
 export default function UploadPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -57,6 +110,9 @@ export default function UploadPage() {
   const pipeline = usePipeline();
 
   const reviewId = searchParams.get('review');
+  const reviewIds = reviewId
+    ? reviewId.split(',').map(v => v.trim()).filter(Boolean)
+    : [];
 
   const [courses, setCourses] = useState<Tables<'courses'>[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState('');
@@ -81,8 +137,8 @@ export default function UploadPage() {
     if (data) setCourses(data);
   }
 
-  if (reviewId) {
-    return <ReviewExtractedItems syllabusUploadId={reviewId} />;
+  if (reviewIds.length > 0) {
+    return <ReviewExtractedItems syllabusUploadId={reviewIds} />;
   }
 
   async function processUpload(file: File | null, textOverride?: string) {
@@ -110,6 +166,16 @@ export default function UploadPage() {
         },
       });
 
+      persistUploadDiagnostics(result.uploadId, result.diagnostics, result.parserStats);
+      if (result.diagnostics.openaiError) {
+        toast.warning(`Extraction fallback used: ${friendlyOpenAIError(result.diagnostics.openaiError)}`);
+      }
+      if (result.createdCount === 0) {
+        toast.warning('No items extracted. Try another file or review parser diagnostics.');
+      } else if (result.diagnostics.warnings.length > 0) {
+        toast.warning(`Extraction completed with warnings (${result.diagnostics.warnings.length}).`);
+      }
+
       setTimeout(() => {
         navigate(`/upload?review=${result.uploadId}`);
       }, 600);
@@ -117,6 +183,59 @@ export default function UploadPage() {
       setStep('error');
       setErrorMsg(err.message || 'An unknown error occurred');
       toast.error(err.message || 'Upload failed');
+    }
+  }
+
+  async function processUploads(files: File[]) {
+    if (!user) {
+      toast.error('Please sign in');
+      return;
+    }
+    if (!selectedCourseId) {
+      toast.error('Please select a course first');
+      return;
+    }
+    if (files.length === 0) {
+      toast.error('Please choose at least one file');
+      return;
+    }
+
+    setErrorMsg('');
+    setFileName(`${files.length} file(s)`);
+
+    try {
+      const result = await pipeline.processUploads({
+        files,
+        courseId: selectedCourseId,
+        userId: user.id,
+        onProgress: (s, msg) => {
+          setStep(s);
+          if (msg) {
+            // Keep latest batch message visible.
+            setFileName(msg);
+          }
+        },
+      });
+
+      for (const entry of result.results) {
+        persistUploadDiagnostics(entry.uploadId, entry.diagnostics, entry.parserStats);
+      }
+
+      const warnings = result.results.flatMap(r => r.diagnostics.warnings);
+      if (warnings.length > 0) {
+        toast.warning(`Batch extraction completed with ${warnings.length} warning(s).`);
+      } else {
+        toast.success(`Processed ${files.length} files and found ${result.createdCount} items.`);
+      }
+
+      setStep('ready');
+      setTimeout(() => {
+        navigate(`/upload?review=${result.uploadIds.join(',')}`);
+      }, 600);
+    } catch (err: any) {
+      setStep('error');
+      setErrorMsg(err.message || 'An unknown error occurred');
+      toast.error(err.message || 'Batch upload failed');
     }
   }
 
@@ -133,19 +252,26 @@ export default function UploadPage() {
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setIsDragging(false);
-    const file = Array.from(e.dataTransfer.files).find(
-      f => f.type === 'application/pdf',
+    const files = Array.from(e.dataTransfer.files).filter(
+      f => isSupportedSyllabusFile(f),
     );
-    if (file) {
-      processUpload(file);
+    if (files.length > 0) {
+      processUploads(files);
     } else {
-      toast.error('Please drop a PDF file');
+      toast.error('Please drop PDF, DOCX, or image files');
     }
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) processUpload(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const supportedFiles = files.filter(isSupportedSyllabusFile);
+    if (supportedFiles.length !== files.length) {
+      toast.error('Some files were skipped. Supported: PDF, DOCX, images');
+      e.target.value = '';
+    }
+    if (supportedFiles.length > 0) processUploads(supportedFiles);
+    e.target.value = '';
   }
 
   const isProcessing = step !== 'idle' && step !== 'error' && step !== 'ready';
@@ -228,10 +354,10 @@ export default function UploadPage() {
           {step === 'idle' && (
             <>
               <h3 className="text-base font-medium text-foreground">
-                {isDragging ? 'Drop your file here' : 'Drag & drop your syllabus PDF'}
+                {isDragging ? 'Drop your file here' : 'Drag & drop your syllabus file'}
               </h3>
               <p className="text-sm text-muted-foreground mt-1">or click to browse</p>
-              <p className="text-xs text-muted-foreground mt-3">PDF files only</p>
+              <p className="text-xs text-muted-foreground mt-3">PDF, DOCX, PNG, JPG, WEBP</p>
             </>
           )}
 
@@ -265,7 +391,8 @@ export default function UploadPage() {
           {step === 'idle' && (
             <input
               type="file"
-              accept=".pdf"
+              accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
+              multiple
               onChange={handleFileSelect}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
@@ -289,7 +416,7 @@ export default function UploadPage() {
           <div className="mt-3 space-y-3 card-elevated p-4">
             <p className="text-xs text-muted-foreground">
               Paste or edit sample syllabus text below, then click &ldquo;Process&rdquo; to
-              test the pipeline without uploading a PDF.
+              test the pipeline without uploading a file.
             </p>
             <Textarea
               value={demoText}

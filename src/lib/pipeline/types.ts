@@ -32,6 +32,34 @@ export interface ProcessResult {
   uploadId: string;
   courseId: string;
   createdCount: number;
+  parserStats: ParserStats | null;
+  diagnostics: ProcessDiagnostics;
+}
+
+export interface BatchProcessResult {
+  uploadIds: string[];
+  courseId: string;
+  createdCount: number;
+  results: ProcessResult[];
+}
+
+export interface ParserStats {
+  blocks_total: number;
+  assignment_candidate_blocks: number;
+  meeting_candidate_blocks: number;
+  professor_candidate_blocks: number;
+  heuristic_items: number;
+  llm_items: number;
+  normalized_items: number;
+  merged_items: number;
+  openai_used: boolean;
+  openai_error: string | null;
+}
+
+export interface ProcessDiagnostics {
+  warnings: string[];
+  openaiError: string | null;
+  quality: 'good' | 'degraded' | 'empty';
 }
 
 export interface SyllabusPipelinePort {
@@ -43,7 +71,14 @@ export interface SyllabusPipelinePort {
     onProgress: (step: UploadStep, message?: string) => void;
   }): Promise<ProcessResult>;
 
-  fetchExtractedItems(uploadId: string): Promise<ExtractedItem[]>;
+  processUploads(params: {
+    files: File[];
+    courseId: string;
+    userId: string;
+    onProgress: (step: UploadStep, message?: string) => void;
+  }): Promise<BatchProcessResult>;
+
+  fetchExtractedItems(uploadId: string | string[]): Promise<ExtractedItem[]>;
 
   acceptItem(item: ExtractedItem, userId: string): Promise<void>;
 

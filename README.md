@@ -18,7 +18,7 @@ Changes made via Lovable will be committed automatically to this repo.
 
 If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+The only requirement is having Node.js **20+** & npm installed — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating). This repo includes an **`.nvmrc`** (Node 22 LTS); with nvm: `nvm install` then `nvm use`.
 
 Follow these steps:
 
@@ -29,10 +29,17 @@ git clone <YOUR_GIT_URL>
 # Step 2: Navigate to the project directory.
 cd <YOUR_PROJECT_NAME>
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Step 3: (Optional) Match the project's Node version if you use nvm.
+nvm use
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Step 4: Install dependencies.
+npm ci   # or: npm i
+
+# Step 5: Environment — copy the example and add your Supabase keys.
+cp .env.example .env
+# Edit .env: VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (Dashboard → Settings → API)
+
+# Step 6: Start the development server.
 npm run dev
 ```
 
@@ -66,7 +73,7 @@ This project is built with:
 
 1. **Upload Page** (`/upload`) — select a course, drag-drop a PDF (or use the demo/seed tool)
 2. **PDF text extraction** — client-side via `pdfjs-dist`
-3. **Edge Function** `process-syllabus` — deterministic parser that creates `extracted_items` rows
+3. **Edge Function** `process-syllabus` — hybrid parser (preprocess + heuristics + OpenAI structured extraction + deterministic normalization) that creates `extracted_items` rows
 4. **Review UI** (`/upload?review=<id>`) — accept / edit / discard each extracted item
 5. Accepted items flow into `assignments`, `courses.professor_email`, or `course_meetings`
 
@@ -76,21 +83,36 @@ This project is built with:
 |------|---------|
 | Storage bucket | Create a **public or private** bucket called `syllabi` in Supabase → Storage. Add a policy allowing authenticated users to INSERT into their own path (`(bucket_id = 'syllabi') AND (auth.uid()::text = (storage.foldername(name))[1])`). |
 | Edge Function deploy | `supabase functions deploy process-syllabus` |
-| Environment variables | The frontend needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env`. The edge function uses `SUPABASE_URL` and `SUPABASE_ANON_KEY` (auto-set by Supabase runtime). |
+| Environment variables | The frontend needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env`. The edge function uses `SUPABASE_URL` and `SUPABASE_ANON_KEY` (auto-set by Supabase runtime), plus `OPENAI_API_KEY` and optional `OPENAI_MODEL` for structured extraction. |
 
 ### Running locally
 
+**Frontend only (hosted Supabase):** `npm run dev` after `.env` is set — no Docker required.
+
+**Full local stack (Postgres, Auth, Storage, edge functions):**
+
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and keep it running (`supabase start` uses containers).
+2. From the repo root, use the Supabase CLI **pinned in this project** (via `npm` scripts — works with or without a global `supabase` install):
+
 ```sh
-# Install dependencies
 npm install
 
-# Start Vite dev server
+# Terminal A — local Supabase (wait until ready)
+npm run supabase:start
+
+# Optional: link a remote project for migrations/deploys
+# supabase link --project-ref <your-project-ref>
+
+# Terminal B — Vite app (http://localhost:8080 by default)
 npm run dev
 
-# (Optional) Serve edge functions locally
-supabase start
-supabase functions serve process-syllabus --no-verify-jwt
+# Terminal C — serve the process-syllabus edge function against local stack
+npm run supabase:functions:serve
 ```
+
+Other useful scripts: `npm run supabase:status`, `npm run supabase:stop`. Deploy the function to hosted Supabase: `npm run supabase:functions:deploy` (after `supabase login` / `supabase link`).
+
+**Security note:** `npm audit fix` is applied where safe. Remaining advisories tied to **Vite 5 / esbuild** are addressed by upgrading to **Vite 8+** (`npm audit fix --force`), which is a breaking change — plan that upgrade separately if needed.
 
 ### Testing the upload pipeline manually
 

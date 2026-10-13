@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Check, X, Pencil, Loader2, Sparkles,
-  Mail, Clock, BookOpen, CheckCircle2,
+  Mail, Clock, BookOpen, CheckCircle2, AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { usePipeline, type ExtractedItem } from '@/lib/pipeline';
+import { getFriendlySupabaseErrorMessage } from '@/lib/runtimeConfig';
+import type { ParserStats, ProcessDiagnostics } from '@/lib/pipeline/types';
 
 const ASSIGNMENT_TYPES = [
   'homework', 'quiz', 'exam', 'project', 'reading', 'lab', 'other',
@@ -60,7 +62,14 @@ function formatDueAt(dueAt: string | null, timeInferred?: boolean): string {
 }
 
 interface Props {
-  syllabusUploadId: string;
+  syllabusUploadId: string | string[];
+}
+
+const UPLOAD_DIAG_STORAGE_PREFIX = 'upload-diagnostics:';
+
+interface StoredUploadDiagnostics {
+  diagnostics: ProcessDiagnostics;
+  parserStats: ParserStats | null;
 }
 
 export function ReviewExtractedItems({ syllabusUploadId }: Props) {
@@ -69,24 +78,58 @@ export function ReviewExtractedItems({ syllabusUploadId }: Props) {
   const pipeline = usePipeline();
   const queryClient = useQueryClient();
 
+  const uploadIds = Array.isArray(syllabusUploadId) ? syllabusUploadId : [syllabusUploadId];
   const [items, setItems] = useState<ExtractedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Record<string, any>>({});
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [acceptingAll, setAcceptingAll] = useState(false);
+  const [uploadDiagnostics, setUploadDiagnostics] = useState<StoredUploadDiagnostics | null>(null);
 
   useEffect(() => {
     load();
   }, [syllabusUploadId]);
+
+  useEffect(() => {
+    try {
+      const records = uploadIds
+        .map(id => sessionStorage.getItem(`${UPLOAD_DIAG_STORAGE_PREFIX}${id}`))
+        .filter(Boolean) as string[];
+
+      if (records.length === 0) {
+        setUploadDiagnostics(null);
+        return;
+      }
+
+      const parsed = records.map(raw => JSON.parse(raw) as StoredUploadDiagnostics);
+      const mergedWarnings = parsed.flatMap(p => p.diagnostics.warnings);
+      const quality = parsed.some(p => p.diagnostics.quality === 'empty')
+        ? 'empty'
+        : parsed.some(p => p.diagnostics.quality === 'degraded')
+          ? 'degraded'
+          : 'good';
+
+      setUploadDiagnostics({
+        diagnostics: {
+          warnings: mergedWarnings,
+          openaiError: parsed.map(p => p.diagnostics.openaiError).find(Boolean) || null,
+          quality,
+        },
+        parserStats: parsed[parsed.length - 1]?.parserStats || null,
+      });
+    } catch {
+      setUploadDiagnostics(null);
+    }
+  }, [syllabusUploadId, uploadIds.join(',')]);
 
   async function load() {
     setLoading(true);
     try {
       const data = await pipeline.fetchExtractedItems(syllabusUploadId);
       setItems(data);
-    } catch {
-      toast.error('Failed to load extracted items');
+    } catch (error) {
+      toast.error(getFriendlySupabaseErrorMessage(error, 'Failed to load extracted items'));
       setItems([]);
     }
     setLoading(false);
@@ -96,6 +139,8 @@ export function ReviewExtractedItems({ syllabusUploadId }: Props) {
   const emails = items.filter(i => i.item_kind === 'professor_email');
   const meetings = items.filter(i => i.item_kind === 'meeting_time');
   const highCount = items.filter(i => i.confidence === 'high').length;
+  const mediumCount = items.filter(i => i.confidence === 'medium').length;
+  const lowCount = items.filter(i => i.confidence === 'low').length;
 
   function startEdit(item: ExtractedItem) {
     setEditingId(item.id);
@@ -118,8 +163,8 @@ export function ReviewExtractedItems({ syllabusUploadId }: Props) {
       setEditingId(null);
       setEditData({});
       toast.success('Item updated');
-    } catch {
-      toast.error('Failed to save changes');
+    } catch (error) {
+      toast.error(getFriendlySupabaseErrorMessage(error, 'Failed to save changes'));
     }
   }
 
@@ -173,6 +218,10 @@ export function ReviewExtractedItems({ syllabusUploadId }: Props) {
     const isBusy = busyIds.has(item.id);
     const p = item.payload as any;
     const isHigh = item.confidence === 'high';
+    const parserReasons = Array.isArray(p?.parser_meta?.confidence_reasons)
+      ? (p.parser_meta.confidence_reasons as string[])
+      : [];
+    const topReasons = parserReasons.slice(0, 3);
 
     return (
       <div
@@ -194,6 +243,12 @@ export function ReviewExtractedItems({ syllabusUploadId }: Props) {
               )}
             </div>
 
+          {(p?.parser_context?.file_name || p?.parser_context?.source_file_name) && (
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Source: {String(p.parser_context.file_name || p.parser_context.source_file_name)}
+            </p>
+          )}
+
             {item.item_kind === 'assignment' && (
               <p className="text-xs text-muted-foreground mt-1">
                 Type: {p.type} &middot; {formatDueAt(p.due_at, p.time_inferred)}
@@ -213,6 +268,11 @@ export function ReviewExtractedItems({ syllabusUploadId }: Props) {
             {item.source_snippet && (
               <p className="text-xs text-muted-foreground/70 mt-2 italic line-clamp-2">
                 &ldquo;{item.source_snippet}&rdquo;
+              </p>
+            )}
+            {!isHigh && topReasons.length > 0 && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                Needs review: {topReasons.join(', ')}
               </p>
             )}
           </div>
@@ -393,7 +453,42 @@ export function ReviewExtractedItems({ syllabusUploadId }: Props) {
           {items.length} item{items.length !== 1 ? 's' : ''} found &middot;{' '}
           {highCount} high confidence
         </p>
+        {(mediumCount > 0 || lowCount > 0) && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+            {mediumCount} medium and {lowCount} low confidence item(s) require careful review.
+          </p>
+        )}
       </div>
+
+      {uploadDiagnostics && (
+        <div className="card-elevated p-3 border border-amber-500/25 bg-amber-500/5 animate-fade-up">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 mt-0.5 text-amber-500" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">
+                Extraction health: {uploadDiagnostics.diagnostics.quality}
+              </p>
+              {uploadDiagnostics.diagnostics.warnings.length > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {uploadDiagnostics.diagnostics.warnings.join(' ')}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  No parser warnings reported for this upload.
+                </p>
+              )}
+              {uploadDiagnostics.parserStats && (
+                <p className="text-[11px] text-muted-foreground">
+                  Heuristic: {uploadDiagnostics.parserStats.heuristic_items}
+                  {' '}· LLM: {uploadDiagnostics.parserStats.llm_items}
+                  {' '}· Normalized: {uploadDiagnostics.parserStats.normalized_items}
+                  {' '}· Final: {uploadDiagnostics.parserStats.merged_items}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {highCount > 0 && (
         <div className="animate-fade-up" style={{ animationDelay: '50ms' }}>

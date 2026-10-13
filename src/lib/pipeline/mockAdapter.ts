@@ -1,4 +1,5 @@
 import type {
+  BatchProcessResult,
   SyllabusPipelinePort,
   ExtractedItem,
   ProcessResult,
@@ -264,7 +265,7 @@ export const mockAdapter: SyllabusPipelinePort = {
     onProgress('uploading', 'Uploading file…');
     await delay(600);
 
-    onProgress('extracting', 'Extracting text from PDF…');
+    onProgress('extracting', 'Extracting text from file…');
     await delay(800);
 
     onProgress('processing', 'Analyzing syllabus…');
@@ -273,13 +274,53 @@ export const mockAdapter: SyllabusPipelinePort = {
     const items = seedItems(uploadId, courseId, userId);
 
     onProgress('ready', `Found ${items.length} items. Ready for review!`);
-    return { uploadId, courseId, createdCount: items.length };
+    return {
+      uploadId,
+      courseId,
+      createdCount: items.length,
+      parserStats: {
+        blocks_total: 8,
+        assignment_candidate_blocks: 3,
+        meeting_candidate_blocks: 1,
+        professor_candidate_blocks: 1,
+        heuristic_items: 6,
+        llm_items: 6,
+        normalized_items: items.length,
+        merged_items: items.length,
+        openai_used: true,
+        openai_error: null,
+      },
+      diagnostics: {
+        warnings: [],
+        openaiError: null,
+        quality: 'good',
+      },
+    };
+  },
+
+  async processUploads({ files, courseId, userId, onProgress }) {
+    const results: ProcessResult[] = [];
+    for (let i = 0; i < files.length; i += 1) {
+      const result = await mockAdapter.processUpload({
+        file: files[i],
+        courseId,
+        userId,
+        onProgress: (step, message) => onProgress(step, `${i + 1}/${files.length} ${message || ''}`.trim()),
+      });
+      results.push(result);
+    }
+    return {
+      uploadIds: results.map(r => r.uploadId),
+      courseId,
+      createdCount: results.reduce((sum, r) => sum + r.createdCount, 0),
+      results,
+    } satisfies BatchProcessResult;
   },
 
   async fetchExtractedItems(uploadId) {
     await delay(300);
-    const items = store.get(uploadId) || [];
-    return items.filter(i => i.status === 'pending');
+    const ids = Array.isArray(uploadId) ? uploadId : [uploadId];
+    return ids.flatMap(id => (store.get(id) || []).filter(i => i.status === 'pending'));
   },
 
   async acceptItem(item) {

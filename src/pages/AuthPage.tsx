@@ -7,9 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, Loader2, BookOpen, User, Building } from 'lucide-react';
+import { Mail, Lock, Loader2, BookOpen, User, Building, Eye, EyeOff } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
+import { getFriendlySupabaseErrorMessage, getSupabaseConfigError } from '@/lib/runtimeConfig';
 
 const emailSchema = z.string().email('Please enter a valid email address');
 const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
@@ -19,6 +20,7 @@ export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [organization, setOrganization] = useState('');
@@ -41,6 +43,7 @@ export default function AuthPage() {
   const {
     toast
   } = useToast();
+  const supabaseConfigError = getSupabaseConfigError();
   const from = (location.state as {
     from?: {
       pathname: string;
@@ -142,7 +145,7 @@ export default function AuthPage() {
             toast({
               variant: 'destructive',
               title: 'Login failed',
-              description: error.message
+              description: getFriendlySupabaseErrorMessage(error, 'Could not sign in. Please try again.')
             });
           }
         }
@@ -159,7 +162,7 @@ export default function AuthPage() {
             toast({
               variant: 'destructive',
               title: 'Sign up failed',
-              description: error.message
+              description: getFriendlySupabaseErrorMessage(error, 'Could not create account. Please try again.')
             });
           }
         } else {
@@ -193,7 +196,7 @@ export default function AuthPage() {
         toast({
           variant: 'destructive',
           title: 'Google sign in failed',
-          description: error.message
+          description: getFriendlySupabaseErrorMessage(error, 'Could not sign in with Google. Please try again.')
         });
       }
     } finally {
@@ -286,6 +289,12 @@ export default function AuthPage() {
             </AnimatePresence>
           </motion.div>
 
+          {supabaseConfigError && (
+            <div className="mb-6 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              {supabaseConfigError} Update `.env`, then restart `npm run dev`.
+            </div>
+          )}
+
           {/* Google Sign In */}
           <motion.div 
             initial={{ opacity: 0, x: -20 }} 
@@ -297,7 +306,7 @@ export default function AuthPage() {
               variant="outline" 
               className="w-full mb-6 h-12 text-base font-medium bg-background/50 hover:bg-background/80 border-border/60 transition-all duration-300 hover:shadow-md hover:border-primary/30" 
               onClick={handleGoogleSignIn} 
-              disabled={isLoading}
+              disabled={isLoading || !!supabaseConfigError}
             >
               <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -444,16 +453,26 @@ export default function AuthPage() {
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                 <Input 
                   id="password" 
-                  type="password" 
+                  type={showPassword ? 'text' : 'password'} 
                   placeholder="••••••••" 
                   value={password} 
                   onChange={e => {
                     setPassword(e.target.value);
                     if (errors.password) setErrors({ ...errors, password: undefined });
                   }} 
-                  className="pl-10 h-12 bg-background/50 border-border/60 focus:border-primary/50 focus:ring-primary/20 transition-all duration-300" 
+                  className="pl-10 pr-11 h-12 bg-background/50 border-border/60 focus:border-primary/50 focus:ring-primary/20 transition-all duration-300" 
                   disabled={isLoading} 
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(prev => !prev)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  disabled={isLoading}
+                >
+                  {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </button>
               </div>
               <AnimatePresence>
                 {errors.password && (
@@ -498,7 +517,7 @@ export default function AuthPage() {
               <Button 
                 type="submit" 
                 className="w-full h-12 text-base font-semibold bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg hover:shadow-xl transition-all duration-300" 
-                disabled={isLoading}
+                disabled={isLoading || !!supabaseConfigError}
               >
                 {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : isLogin ? 'Sign in' : 'Create account'}
               </Button>
