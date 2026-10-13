@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { AssignmentTypeIcon } from '@/components/shared/AssignmentTypeIcon';
 import { CourseCalendar } from '@/components/course/CourseCalendar';
+import { ExamTimeline } from '@/components/course/ExamTimeline';
 import { AddAssignmentCard } from '@/components/shared/AddAssignmentCard';
 import { CompleteToggle } from '@/components/shared/CompleteToggle';
 import { byDueDate, isOpen } from '@/lib/assignments';
@@ -211,6 +212,8 @@ export default function CourseDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6">
+          <ExamTimeline assignments={assignments} />
+
           {/* Upcoming Deadlines */}
           <div className="card-elevated p-5">
             <div className="flex items-center justify-between mb-4">

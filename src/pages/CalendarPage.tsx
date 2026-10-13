@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, List, Grid3X3 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, List, Grid3X3, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CoursePill } from '@/components/shared/CoursePill';
+import { AssignmentTypeIcon } from '@/components/shared/AssignmentTypeIcon';
 import { cn } from '@/lib/utils';
 import { useLiveAssignments, useLiveCourses } from '@/hooks/useAcademicData';
 import { byDueDate, isOpen } from '@/lib/assignments';
@@ -30,7 +31,10 @@ export default function CalendarPage() {
   }
   
   const getAssignmentsForDay = (date: Date) => 
-    assignments.filter((a) => a.dueDate && isSameDay(a.dueDate, date));
+    assignments
+      .filter((a) => a.dueDate && isSameDay(a.dueDate, date))
+      // Exams first so they are never hidden behind "+N more".
+      .sort((a, b) => Number(b.type === 'exam') - Number(a.type === 'exam'));
 
   const firstDayOfWeek = monthStart.getDay();
   const paddingDays = Array(firstDayOfWeek).fill(null);
@@ -157,13 +161,20 @@ export default function CalendarPage() {
                       return (
                         <div
                           key={assignment.id}
-                          className={cn('text-xs p-1 rounded truncate', assignment.status === 'completed' && 'line-through opacity-50')}
-                          style={{ 
-                            backgroundColor: `hsl(var(--course-${course.color}) / 0.15)`,
-                            color: `hsl(var(--course-${course.color}))`
-                          }}
+                          className={cn(
+                            'text-xs p-1 rounded truncate',
+                            assignment.type === 'exam' && 'font-semibold flex items-center gap-1',
+                            assignment.status === 'completed' && 'line-through opacity-50',
+                          )}
+                          style={assignment.type === 'exam'
+                            ? { backgroundColor: `hsl(var(--course-${course.color}))`, color: 'white' }
+                            : {
+                                backgroundColor: `hsl(var(--course-${course.color}) / 0.15)`,
+                                color: `hsl(var(--course-${course.color}))`,
+                              }}
                         >
-                          {assignment.title}
+                          {assignment.type === 'exam' && <GraduationCap className="w-3 h-3 shrink-0" />}
+                          <span className="truncate">{assignment.title}</span>
                         </div>
                       );
                     })}
@@ -205,7 +216,10 @@ export default function CalendarPage() {
                       <p className="text-sm font-medium text-foreground truncate">
                         {assignment.title}
                       </p>
-                      <CoursePill name={course.section || course.name} color={course.color} className="mt-1" />
+                      <div className="flex items-center gap-2 mt-1">
+                        <CoursePill name={course.section || course.name} color={course.color} />
+                        {assignment.type === 'exam' && <AssignmentTypeIcon type="exam" />}
+                      </div>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm font-medium text-foreground">
