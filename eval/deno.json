@@ -1,0 +1,6 @@
+{
+  "nodeModulesDir": "none",
+  "tasks": {
+    "eval": "deno run --allow-read --allow-write --allow-net --allow-env --env-file=../supabase/functions/.env run.ts"
+  }
+}

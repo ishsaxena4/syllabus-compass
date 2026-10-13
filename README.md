@@ -1,139 +1,123 @@
-# Welcome to your Lovable project
+# Syllabus Compass
 
-## Project info
+Turn a semester's worth of syllabi into one planner.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+Upload a course's syllabus and schedule (PDF, Word, or a photo). Syllabus Compass reads them, pulls out every homework, quiz, exam, discussion post and project with its due date and time, finds the class meeting times and instructor contacts, and puts everything on a dashboard and calendar. Nothing is added blindly: you review each extracted item, edit what's off, and accept what's right.
 
-## How can I edit this code?
+## What it does
 
-There are several ways of editing your application.
+- **Upload & extract**: drop in one or more files per course. A syllabus and a separate schedule are read together, so a date from the calendar and a time from the syllabus policy end up on the same item.
+- **Review before import**: every item shows where it came from and how confident the extractor is. Anything ambiguous (TBA finals, rules without dates) is flagged rather than guessed.
+- **Dashboard**: today's work, what's due in the next week, and items that need attention.
+- **Calendar & course pages**: deadlines by month and by course, with meeting times and the professor's email.
+- **Manual entry**: add or edit assignments and courses yourself.
 
-**Use Lovable**
+## How extraction works
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js **20+** & npm installed — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating). This repo includes an **`.nvmrc`** (Node 22 LTS); with nvm: `nvm install` then `nvm use`.
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: (Optional) Match the project's Node version if you use nvm.
-nvm use
-
-# Step 4: Install dependencies.
-npm ci   # or: npm i
-
-# Step 5: Environment — copy the example and add your Supabase keys.
-cp .env.example .env
-# Edit .env: VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (Dashboard → Settings → API)
-
-# Step 6: Start the development server.
-npm run dev
+```
+browser ──upload──▶ Supabase Storage (syllabi/<user>/...)
+   │
+   └─invoke──▶ Edge Function: process-syllabus
+                 1. download the course's files
+                 2. send them to Claude as-is (PDFs/images natively, DOCX as HTML)
+                    with a strict JSON schema for the output
+                 3. validate dates/times, drop duplicates, convert local times
+                    to UTC using the student's timezone
+                 4. write extracted_items (status: pending)
+   ◀── review screen: accept → assignments / course_meetings / courses
 ```
 
-**Edit a file directly in GitHub**
+Claude reads the whole document, including tables and calendar grids, in one call. Code handles everything that must be exact: date validity, timezones and deduplication. The prompt (`supabase/functions/process-syllabus/extract/prompt.ts`) is written as general rules for any syllabus, and accuracy is measured against real syllabi (see [Extraction benchmark](#extraction-benchmark)).
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Status
 
-**Use GitHub Codespaces**
+| Area | State |
+|---|---|
+| Auth (email + Google), onboarding, dashboard, calendar, courses | Working |
+| Claude extractor (`extract/`) + benchmark | Built; being tuned on real syllabi |
+| `process-syllabus` edge function | Still runs the previous regex + OpenAI parser; switching to the Claude extractor next |
+| Sylli (AI assistant chat) | Paused; edge functions are stubs |
+| Reminders / notifications | Tables exist; nothing schedules reminders yet |
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Tech stack
 
-## What technologies are used for this project?
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, TanStack Query, React Router
+- **Backend:** Supabase (Postgres with row-level security, Auth, Storage, Edge Functions on Deno)
+- **Extraction:** Claude API via `@anthropic-ai/sdk` with structured outputs
+- **Hosting:** Vercel (frontend), Supabase cloud (everything else)
 
-This project is built with:
+## Project layout
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+```
+src/
+  pages/                 route screens (Dashboard, Calendar, Courses, Upload, Settings, ...)
+  components/            UI; upload/ReviewExtractedItems.tsx is the review screen
+  hooks/useAcademicData  data fetching for courses, assignments, attention items
+  lib/pipeline/          upload → process → review client (real + mock adapters)
+  integrations/supabase/ client and generated database types
+  types/                 shared app types, including ASSIGNMENT_TYPES
+supabase/
+  migrations/            database schema, applied with `supabase db push`
+  functions/process-syllabus/
+    extract/             Claude extractor: schema, prompt, API call, post-processing
+eval/                    benchmark runner and scorer for the extractor
+Benchmark/               (gitignored) your syllabi, answer keys, and run outputs
+```
 
-## Syllabus Upload Pipeline
+## Getting started
 
-### Architecture
-
-1. **Upload Page** (`/upload`) — select a course, drag-drop a PDF (or use the demo/seed tool)
-2. **PDF text extraction** — client-side via `pdfjs-dist`
-3. **Edge Function** `process-syllabus` — hybrid parser (preprocess + heuristics + OpenAI structured extraction + deterministic normalization) that creates `extracted_items` rows
-4. **Review UI** (`/upload?review=<id>`) — accept / edit / discard each extracted item
-5. Accepted items flow into `assignments`, `courses.professor_email`, or `course_meetings`
-
-### Required Supabase setup
-
-| Step | Details |
-|------|---------|
-| Storage bucket | Create a **public or private** bucket called `syllabi` in Supabase → Storage. Add a policy allowing authenticated users to INSERT into their own path (`(bucket_id = 'syllabi') AND (auth.uid()::text = (storage.foldername(name))[1])`). |
-| Edge Function deploy | `supabase functions deploy process-syllabus` |
-| Environment variables | The frontend needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env`. The edge function uses `SUPABASE_URL` and `SUPABASE_ANON_KEY` (auto-set by Supabase runtime), plus `OPENAI_API_KEY` and optional `OPENAI_MODEL` for structured extraction. |
-
-### Running locally
-
-**Frontend only (hosted Supabase):** `npm run dev` after `.env` is set — no Docker required.
-
-**Full local stack (Postgres, Auth, Storage, edge functions):**
-
-1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and keep it running (`supabase start` uses containers).
-2. From the repo root, use the Supabase CLI **pinned in this project** (via `npm` scripts — works with or without a global `supabase` install):
+Requirements: Node 20+ (`.nvmrc` pins 22), the [Supabase CLI](https://supabase.com/docs/guides/cli), and [Deno](https://deno.com) for edge functions and the benchmark.
 
 ```sh
 npm install
-
-# Terminal A — local Supabase (wait until ready)
-npm run supabase:start
-
-# Optional: link a remote project for migrations/deploys
-# supabase link --project-ref <your-project-ref>
-
-# Terminal B — Vite app (http://localhost:8080 by default)
-npm run dev
-
-# Terminal C — serve the process-syllabus edge function against local stack
-npm run supabase:functions:serve
+cp .env.example .env     # add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY
+npm run dev              # http://localhost:8080
 ```
 
-Other useful scripts: `npm run supabase:status`, `npm run supabase:stop`. Deploy the function to hosted Supabase: `npm run supabase:functions:deploy` (after `supabase login` / `supabase link`).
+The frontend talks to the hosted Supabase project; no local database or Docker is needed.
 
-**Security note:** `npm audit fix` is applied where safe. Remaining advisories tied to **Vite 5 / esbuild** are addressed by upgrading to **Vite 8+** (`npm audit fix --force`), which is a breaking change — plan that upgrade separately if needed.
+### Supabase
 
-### Testing the upload pipeline manually
+```sh
+supabase login
+supabase link --project-ref <project-ref>
+supabase db push                                   # apply migrations
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-...  # used by the edge function
+supabase functions deploy process-syllabus
+npm run supabase:types                             # regenerate src/integrations/supabase/types.ts
+```
 
-1. Sign in (or sign up) at `/auth`
-2. Go to `/courses` and create a course (e.g. "CS 301")
-3. Go to `/upload`, select the course from the dropdown
-4. **Option A — PDF upload:** drag-drop a syllabus PDF into the upload zone
-5. **Option B — Demo seed:** click "Show demo / seed tool", review the sample text, click "Process Demo Text"
-6. The pipeline runs: Uploading → Extracting → Processing → Ready
-7. You are redirected to the Review UI showing extracted items grouped by kind
-8. Accept, edit, or discard items. High-confidence items are visually marked "Auto-confirm suggested"
-9. Verify: accepted assignments appear in `assignments` table; professor email updates `courses.professor_email`; meeting times appear in `course_meetings`
+In the dashboard, set **Authentication → URL Configuration** to include your local URL and your Vercel domain so sign-up and password-reset links work.
 
-## How can I deploy this project?
+## Extraction benchmark
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+The extractor is scored against hand-checked answer keys for real syllabi. Syllabi and keys live in `Benchmark/` and are never committed.
 
-## Can I connect a custom domain to my Lovable project?
+```
+Benchmark/
+  Syllabi/      the PDFs/DOCX files
+  expected/     one <course>.json answer key per course (format in expected/README.md)
+  runs/         outputs and summary.txt from each run
+```
 
-Yes, you can!
+Put your Anthropic key in `supabase/functions/.env` (gitignored; also used by `supabase functions serve`):
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Then:
+
+```sh
+cd eval
+deno task eval --estimate                                # input token counts, free
+deno task eval                                           # default model config, all courses
+deno task eval --configs opus5-medium,sonnet5-medium,haiku45 --cases ma261
+deno test ../supabase/functions/process-syllabus/extract/ .   # unit tests
+```
+
+Each run reports recall (required items found), precision, type and time accuracy, invented times, meetings, contacts, and actual cost, then lists every miss, extra item and wrong time.
+
+## Deploying
+
+The frontend deploys to Vercel as a static Vite app. `vercel.json` rewrites all routes to `index.html` so deep links work. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in the Vercel project's environment variables.
