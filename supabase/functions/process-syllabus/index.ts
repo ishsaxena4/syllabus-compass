@@ -9,6 +9,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import { ExtractionError, extractSyllabus, type SourceDocument } from './extract/claude.ts'
 import { cleanExtraction, isValidTimeZone } from './extract/resolve.ts'
 import { buildItemRows, buildSummary } from './rows.ts'
+import { countRuns, MAX_RUNS_PER_DAY } from './limits.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,6 +18,7 @@ const corsHeaders = {
 
 const MAX_FILES = 10
 const MAX_NOTES_LENGTH = 2000
+
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -65,6 +67,19 @@ Deno.serve(async (req) => {
     const uploadIds = [...new Set(ids as string[])]
     const notes = typeof body.student_notes === 'string' ? body.student_notes.trim().slice(0, MAX_NOTES_LENGTH) : ''
     const timezone = typeof body.timezone === 'string' && isValidTimeZone(body.timezone) ? body.timezone : 'UTC'
+
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const { data: recent, error: recentErr } = await supabase
+      .from('syllabus_uploads')
+      .select('processed_at')
+      .eq('user_id', user.id)
+      .gte('processed_at', since)
+    if (recentErr) return json({ error: `Could not check usage: ${recentErr.message}` }, 500)
+    if (countRuns((recent ?? []).map(r => r.processed_at)) >= MAX_RUNS_PER_DAY) {
+      return json({
+        error: `You've reached the limit of ${MAX_RUNS_PER_DAY} syllabus extractions in 24 hours. Please try again tomorrow.`,
+      }, 429)
+    }
 
     const { data: uploadRows, error: upErr } = await supabase
       .from('syllabus_uploads')

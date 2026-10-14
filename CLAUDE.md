@@ -1,28 +1,37 @@
 # Syllabus Compass — working notes
 
-See README.md for what the app is, the architecture, and setup.
+See README.md for what the app is, the architecture, setup, and how each part deploys.
 
-## Current state (branch `rebuild`)
-- Supabase project `olkriduceflppgxmeghr` is live and linked (`supabase db push` works from the repo). The migration history is in sync.
-- The Claude extractor in `supabase/functions/process-syllabus/extract/` is done and benchmarked. The chosen model is **Claude Opus 5 at medium effort** (`DEFAULT_MODEL` in `extract/claude.ts`).
-  - Benchmark: 4 real courses, 61 required items, 100% recall and precision, all due times correct, about $0.30 per course.
-  - Confidence means "is the date/time right", not "how many sources"; `ambiguity` is only for real doubts about the date/time. Before this rule, every item got a caveat and nothing was pre-selected in review. After it (run 2026-10-13T22-27-17), only the 4 undated items of 63 are flagged.
+## Current state (live as of 2026-10-13)
+- **Live app:** https://syllabus-compass.vercel.app (Vercel project `syllabus-compass`; every push to `main` deploys, PRs get previews). A second Vercel project, `syllabus-os`, used to deploy this repo too; it was removed. Its per-deployment URLs sat behind Vercel SSO.
+- **Branches:** `main` is what's deployed. Work on `rebuild` (or a feature branch), open a PR, merge. GitHub Actions runs type-check, build, and Deno tests.
+- **Supabase** project `olkriduceflppgxmeghr` is linked; migration history is in sync. Auth Site URL is the Vercel URL; redirect URLs are the Vercel URL and `http://localhost:8080`, both with `/**`.
+- **Keys:** the app and `process-syllabus` use only the publishable key. Legacy anon/service_role keys are disabled. Function secrets: `ANTHROPIC_API_KEY` (plus Supabase's built-ins). `OPENAI_API_KEY` and `LOVABLE_API_KEY` were removed.
+- **Extractor** (`supabase/functions/process-syllabus/extract/`): **Claude Opus 5 at medium effort** (`DEFAULT_MODEL` in `extract/claude.ts`).
+  - Benchmark: 4 real courses, 63 items, 100% recall and precision, all due times correct, about $0.30 per course.
+  - Confidence means "is the date/time right", not "how many sources"; `ambiguity` is only for real doubts about the date/time. Before this rule every item got a caveat and nothing was pre-selected in review. After it (run 2026-10-13T22-27-17), only the 4 undated items are flagged.
   - Sonnet 5 and Haiku 4.5 each misdated an exam from a calendar grid, so don't switch models without re-running the benchmark.
-- The benchmark lives in `eval/` (`cd eval && deno task eval`). Syllabi and answer keys are in gitignored `Benchmark/`. The Anthropic key is in gitignored `supabase/functions/.env`.
-- `process-syllabus` (code on this branch) runs the Claude extractor: `index.ts` takes `syllabus_upload_ids` + `student_notes` + `timezone`, runs as the calling user with the publishable key (`SUPABASE_PUBLISHABLE_KEYS`), writes `extracted_items`, and stores course info/rules/warnings in `syllabus_uploads.extraction` (migration `20261014000000`). Row mapping is in `rows.ts`. Re-running a batch replaces its pending items.
-- Frontend: the upload page stages files plus an optional notes box, uploads them all, then calls the function once. The review screen shows time basis, ambiguity, source quote, course rules/warnings, and an undated section. pdfjs/mammoth are gone from the client.
-- Instructor contacts become `professor_email` items (TAs are not imported). Office-hours meetings, when accepted, fill `courses.office_hours` instead of `course_meetings`.
-- Deployed and tested end to end on 2026-10-13 with MA 261 (syllabus + schedule): all homeworks, quizzes, midterms, recitation, office hours and email extracted; review pre-selects everything except the undated final and the lecture with no end time.
+- **Benchmark** lives in `eval/` (`cd eval && deno task eval`). Syllabi and answer keys are in gitignored `Benchmark/`. The Anthropic key for it is in gitignored `supabase/functions/.env`.
+- **`process-syllabus`**: takes `syllabus_upload_ids` + `student_notes` + `timezone`, runs as the calling user, writes `extracted_items`, and stores course info/rules/warnings in `syllabus_uploads.extraction`. Row mapping is in `rows.ts`; re-running a batch replaces its pending items. `limits.ts` caps each user at 10 runs per 24 hours (429 after that).
+- **Frontend behaviour worth knowing:**
+  - Review pre-selects items with no `attentionReason` (`lib/pipeline/review.ts`). Already-past items are grouped and imported as done by default. `acceptItems` batches inserts.
+  - Assignment views share rules in `lib/assignments.ts`: open = not done and not past due; undated items have `dueDate: null`.
+  - All clock times go through `lib/time.ts` (12-hour). Exams use the dark pill from `AssignmentTypeIcon`.
+  - Attention Needed reads `v_risky_items` (`risk_reason` codes: missing-date, low-confidence, unconfirmed). Resolve/dismiss write to `assignments` (`attention_dismissed_at`).
+  - `lib/recoveryRedirect.ts` is imported first in `main.tsx` and moves any `type=recovery` URL to `/auth/reset-password` before the Supabase client reads it.
+  - Instructor contacts become `professor_email` items (TAs are not imported). Accepted office hours fill `courses.office_hours`.
+- **Paused:** Sylli (AI chat) is hidden from the nav and routes; `pages/SylliPage.tsx` and the `chat*` function stubs remain in the repo.
 
-## Next tasks
-- Done 2026-10-13: legacy anon/service_role keys disabled; `OPENAI_API_KEY` and `LOVABLE_API_KEY` secrets removed.
-- Done 2026-10-13: Attention Needed fixed (migration `20261015000000`: `risk_reason` codes, saved resolve/dismiss via `assignments.attention_dismissed_at`); unused UTC views `v_today`/`v_due_soon` dropped. Pending reviews are reachable from the Upload page and course Overview.
-1. Remaining:
-   - Deploy the frontend to Vercel.
-   - Configure Supabase auth redirect URLs.
+## Open items
+- **Delete leftover deployed functions** (user's call): `chat`, `chat-confirm`, `chat-cancel` (placeholder echoes on the disabled anon key), and `send-reminders`. The last isn't in the repo, uses the disabled service-role key, and its optional cron secret was never set.
+- **Production email:** Supabase's built-in email sender is rate-limited (a few emails per hour). Set up custom SMTP before real users sign up.
+- **Spend cap:** set a monthly limit for the Anthropic key in the Anthropic Console, as a backstop to the per-user limit.
+- Revoke the old OpenAI key at OpenAI; removing it from Supabase doesn't revoke it.
+- Ideas, not started: real grading weights on the course Overview (currently a hardcoded placeholder card); reminders/notifications; Sylli.
 
 ## Conventions
 - Keep the extraction prompt as general rules. Never add instructions aimed at one specific syllabus, which would overfit to the benchmark.
 - Re-run the benchmark after any change to the prompt, schema, or model, and check with the user before spending more than a few dollars.
 - Never print secrets: no `supabase projects api-keys` output and no `.env` contents.
+- Production deploys (`supabase db push`, `supabase functions deploy`) are run by the user.
 - Commit with the attribution trailer the harness provides.
