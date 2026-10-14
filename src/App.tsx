@@ -17,7 +17,6 @@ import SettingsPage from "./pages/SettingsPage";
 import AuthPage from "./pages/AuthPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
-import SylliPage from "./pages/SylliPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -73,16 +72,6 @@ const App = () => (
               <ProtectedRoute>
                 <AppLayout>
                   <CourseDetail />
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/sylli"
-            element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <SylliPage />
                 </AppLayout>
               </ProtectedRoute>
             }
