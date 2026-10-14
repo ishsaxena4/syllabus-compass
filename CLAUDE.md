@@ -20,10 +20,9 @@ See README.md for what the app is, the architecture, setup, and how each part de
   - Attention Needed reads `v_risky_items` (`risk_reason` codes: missing-date, low-confidence, unconfirmed). Resolve/dismiss write to `assignments` (`attention_dismissed_at`).
   - `lib/recoveryRedirect.ts` is imported first in `main.tsx` and moves any `type=recovery` URL to `/auth/reset-password` before the Supabase client reads it.
   - Instructor contacts become `professor_email` items (TAs are not imported). Accepted office hours fill `courses.office_hours`.
-- **Paused:** Sylli (AI chat) is hidden from the nav and routes; `pages/SylliPage.tsx` and the `chat*` function stubs remain in the repo.
+- **Paused:** Sylli (AI chat) is hidden from the nav and routes; `pages/SylliPage.tsx` and the `chat*` function stubs remain in the repo but are not deployed. `process-syllabus` is the only deployed function (the old `chat*` and Lovable `send-reminders` functions were deleted 2026-10-13).
 
 ## Open items
-- **Delete leftover deployed functions** (user's call): `chat`, `chat-confirm`, `chat-cancel` (placeholder echoes on the disabled anon key), and `send-reminders`. The last isn't in the repo, uses the disabled service-role key, and its optional cron secret was never set.
 - **Production email:** Supabase's built-in email sender is rate-limited (a few emails per hour). Set up custom SMTP before real users sign up.
 - **Spend cap:** set a monthly limit for the Anthropic key in the Anthropic Console, as a backstop to the per-user limit.
 - Revoke the old OpenAI key at OpenAI; removing it from Supabase doesn't revoke it.
