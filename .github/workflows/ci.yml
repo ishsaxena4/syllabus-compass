@@ -15,6 +15,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - run: npm run lint
       - run: npx tsc -p tsconfig.app.json --noEmit
       - run: npm run build
 

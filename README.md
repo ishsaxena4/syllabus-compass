@@ -38,9 +38,8 @@ Claude reads the whole document, including tables and calendar grids, in one cal
 |---|---|
 | Auth (email + Google, password reset), onboarding, dashboard, calendar, courses | Live |
 | Claude extractor (`extract/`) + benchmark | Live; 100% recall/precision on the 4-course benchmark |
-| `process-syllabus` edge function | Live; one call per course, limited to 10 runs per user per day |
-| Sylli (AI assistant chat) | Paused and hidden from the app; page and function stubs remain in the repo |
-| Reminders / notifications | Tables exist; nothing schedules reminders yet |
+| `process-syllabus` edge function | Live; one call per course, limited to 10 runs per user per day and 20 MB of files per run |
+| Reminders / notifications | Not built |
 
 ## Tech stack
 
@@ -66,7 +65,7 @@ supabase/
   functions/process-syllabus/
     index.ts             HTTP handler: auth, download, extract, write rows
     rows.ts              maps the extraction to extracted_items rows
-    limits.ts            per-user daily run limit
+    limits.ts            daily run limit (enforced in SQL) and file size caps
     extract/             Claude extractor: schema, prompt, API call, post-processing
 eval/                    benchmark runner and scorer for the extractor
 Benchmark/               (gitignored) your syllabi, answer keys, and run outputs
@@ -140,4 +139,4 @@ Each run reports recall (required items found), precision, type and time accurac
 | Edge function | `supabase functions deploy process-syllabus` (not automatic). |
 | Secrets | `ANTHROPIC_API_KEY` in Supabase function secrets. The app uses only the publishable key; legacy anon/service_role keys are disabled. |
 
-`vercel.json` rewrites all routes to `index.html` so deep links work. GitHub Actions (`.github/workflows/ci.yml`) type-checks and builds the frontend and runs the Deno tests on every push and pull request.
+`vercel.json` rewrites all routes to `index.html` so deep links work and sets security headers. Its Content-Security-Policy allows only this Supabase project and Google Fonts; update `connect-src` if either changes. GitHub Actions (`.github/workflows/ci.yml`) lints, type-checks and builds the frontend and runs the Deno tests on every push and pull request.

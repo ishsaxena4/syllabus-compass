@@ -48,6 +48,7 @@ export type Database = {
           created_at: string
           due_at: string | null
           external_calendar_event_id: string | null
+          extracted_item_id: string | null
           id: string
           notes: string | null
           source_snippet: string | null
@@ -66,6 +67,7 @@ export type Database = {
           created_at?: string
           due_at?: string | null
           external_calendar_event_id?: string | null
+          extracted_item_id?: string | null
           id?: string
           notes?: string | null
           source_snippet?: string | null
@@ -84,6 +86,7 @@ export type Database = {
           created_at?: string
           due_at?: string | null
           external_calendar_event_id?: string | null
+          extracted_item_id?: string | null
           id?: string
           notes?: string | null
           source_snippet?: string | null
@@ -103,6 +106,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "assignments_extracted_item_id_fkey"
+            columns: ["extracted_item_id"]
+            isOneToOne: true
+            referencedRelation: "extracted_items"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "assignments_syllabus_upload_id_fkey"
             columns: ["syllabus_upload_id"]
             isOneToOne: false
@@ -111,115 +121,6 @@ export type Database = {
           },
         ]
       }
-      chat_actions: {
-        Row: {
-          action_type: string
-          confirmed_at: string | null
-          created_at: string
-          error: string | null
-          executed_at: string | null
-          id: string
-          payload: Json
-          session_id: string | null
-          status: string
-          summary: string
-          user_id: string
-        }
-        Insert: {
-          action_type: string
-          confirmed_at?: string | null
-          created_at?: string
-          error?: string | null
-          executed_at?: string | null
-          id?: string
-          payload: Json
-          session_id?: string | null
-          status?: string
-          summary: string
-          user_id: string
-        }
-        Update: {
-          action_type?: string
-          confirmed_at?: string | null
-          created_at?: string
-          error?: string | null
-          executed_at?: string | null
-          id?: string
-          payload?: Json
-          session_id?: string | null
-          status?: string
-          summary?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "chat_actions_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "chat_sessions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      chat_messages: {
-        Row: {
-          content: string
-          created_at: string
-          id: string
-          metadata: Json
-          role: string
-          session_id: string | null
-          user_id: string
-        }
-        Insert: {
-          content: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          role: string
-          session_id?: string | null
-          user_id: string
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          role?: string
-          session_id?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "chat_messages_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "chat_sessions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      chat_sessions: {
-        Row: {
-          created_at: string
-          id: string
-          title: string | null
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          title?: string | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          title?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
       course_meetings: {
         Row: {
           course_id: string
@@ -227,6 +128,7 @@ export type Database = {
           days: Database["public"]["Enums"]["weekday"][]
           end_time: string
           external_calendar_event_id: string | null
+          extracted_item_id: string | null
           id: string
           location: string | null
           start_time: string
@@ -240,6 +142,7 @@ export type Database = {
           days: Database["public"]["Enums"]["weekday"][]
           end_time: string
           external_calendar_event_id?: string | null
+          extracted_item_id?: string | null
           id?: string
           location?: string | null
           start_time: string
@@ -253,6 +156,7 @@ export type Database = {
           days?: Database["public"]["Enums"]["weekday"][]
           end_time?: string
           external_calendar_event_id?: string | null
+          extracted_item_id?: string | null
           id?: string
           location?: string | null
           start_time?: string
@@ -266,6 +170,13 @@ export type Database = {
             columns: ["course_id"]
             isOneToOne: false
             referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_meetings_extracted_item_id_fkey"
+            columns: ["extracted_item_id"]
+            isOneToOne: true
+            referencedRelation: "extracted_items"
             referencedColumns: ["id"]
           },
         ]
@@ -318,7 +229,6 @@ export type Database = {
           item_kind: string
           payload: Json
           reviewed_at: string | null
-          source_location: Json | null
           source_snippet: string | null
           status: Database["public"]["Enums"]["extraction_item_status"]
           syllabus_upload_id: string
@@ -333,7 +243,6 @@ export type Database = {
           item_kind: string
           payload: Json
           reviewed_at?: string | null
-          source_location?: Json | null
           source_snippet?: string | null
           status?: Database["public"]["Enums"]["extraction_item_status"]
           syllabus_upload_id: string
@@ -348,7 +257,6 @@ export type Database = {
           item_kind?: string
           payload?: Json
           reviewed_at?: string | null
-          source_location?: Json | null
           source_snippet?: string | null
           status?: Database["public"]["Enums"]["extraction_item_status"]
           syllabus_upload_id?: string
@@ -372,53 +280,23 @@ export type Database = {
           },
         ]
       }
-      notifications: {
+      extraction_runs: {
         Row: {
-          assignment_id: string | null
-          body: string
-          channel: Database["public"]["Enums"]["notification_channel"]
-          created_at: string
           id: string
-          read_at: string | null
-          title: string
+          started_at: string
           user_id: string
         }
         Insert: {
-          assignment_id?: string | null
-          body: string
-          channel?: Database["public"]["Enums"]["notification_channel"]
-          created_at?: string
           id?: string
-          read_at?: string | null
-          title: string
+          started_at?: string
           user_id: string
         }
         Update: {
-          assignment_id?: string | null
-          body?: string
-          channel?: Database["public"]["Enums"]["notification_channel"]
-          created_at?: string
           id?: string
-          read_at?: string | null
-          title?: string
+          started_at?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "notifications_assignment_id_fkey"
-            columns: ["assignment_id"]
-            isOneToOne: false
-            referencedRelation: "assignments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "notifications_assignment_id_fkey"
-            columns: ["assignment_id"]
-            isOneToOne: false
-            referencedRelation: "v_risky_items"
-            referencedColumns: ["entity_id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -450,87 +328,6 @@ export type Database = {
         }
         Relationships: []
       }
-      reminder_jobs: {
-        Row: {
-          assignment_id: string
-          created_at: string
-          id: string
-          scheduled_for: string
-          sent_at: string | null
-          user_id: string
-        }
-        Insert: {
-          assignment_id: string
-          created_at?: string
-          id?: string
-          scheduled_for: string
-          sent_at?: string | null
-          user_id: string
-        }
-        Update: {
-          assignment_id?: string
-          created_at?: string
-          id?: string
-          scheduled_for?: string
-          sent_at?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reminder_jobs_assignment_id_fkey"
-            columns: ["assignment_id"]
-            isOneToOne: false
-            referencedRelation: "assignments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reminder_jobs_assignment_id_fkey"
-            columns: ["assignment_id"]
-            isOneToOne: false
-            referencedRelation: "v_risky_items"
-            referencedColumns: ["entity_id"]
-          },
-        ]
-      }
-      reminder_prefs: {
-        Row: {
-          created_at: string
-          email_enabled: boolean
-          quiet_end: string | null
-          quiet_hours_enabled: boolean
-          quiet_start: string | null
-          reminder_enabled: boolean
-          reminder_lead_minutes: number
-          timezone: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          email_enabled?: boolean
-          quiet_end?: string | null
-          quiet_hours_enabled?: boolean
-          quiet_start?: string | null
-          reminder_enabled?: boolean
-          reminder_lead_minutes?: number
-          timezone?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          email_enabled?: boolean
-          quiet_end?: string | null
-          quiet_hours_enabled?: boolean
-          quiet_start?: string | null
-          reminder_enabled?: boolean
-          reminder_lead_minutes?: number
-          timezone?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       syllabus_uploads: {
         Row: {
           course_id: string | null
@@ -541,7 +338,6 @@ export type Database = {
           file_path: string
           id: string
           processed_at: string | null
-          raw_text: string | null
           user_id: string
         }
         Insert: {
@@ -553,7 +349,6 @@ export type Database = {
           file_path: string
           id?: string
           processed_at?: string | null
-          raw_text?: string | null
           user_id: string
         }
         Update: {
@@ -565,7 +360,6 @@ export type Database = {
           file_path?: string
           id?: string
           processed_at?: string | null
-          raw_text?: string | null
           user_id?: string
         }
         Relationships: [
@@ -612,6 +406,7 @@ export type Database = {
       }
     }
     Functions: {
+      claim_extraction_run: { Args: never; Returns: boolean }
       delete_course_cascade: {
         Args: { p_course_id: string }
         Returns: undefined
@@ -630,7 +425,6 @@ export type Database = {
         | "other"
       extraction_confidence: "high" | "medium" | "low"
       extraction_item_status: "pending" | "accepted" | "discarded"
-      notification_channel: "in_app" | "email"
       weekday: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun"
     }
     CompositeTypes: {
@@ -775,7 +569,6 @@ export const Constants = {
       ],
       extraction_confidence: ["high", "medium", "low"],
       extraction_item_status: ["pending", "accepted", "discarded"],
-      notification_channel: ["in_app", "email"],
       weekday: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
     },
   },

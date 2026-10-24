@@ -26,7 +26,9 @@ export function getSupabaseConfigError(): string | null {
 
 export function getFriendlySupabaseErrorMessage(error: unknown, fallback: string): string {
   const configError = getSupabaseConfigError();
-  if (configError) return `${configError} Restart \`npm run dev\` after updating .env.`;
+  if (configError) {
+    return import.meta.env.DEV ? `${configError} Restart \`npm run dev\` after updating .env.` : fallback;
+  }
 
   const message =
     typeof error === 'string'
@@ -36,7 +38,9 @@ export function getFriendlySupabaseErrorMessage(error: unknown, fallback: string
         : '';
 
   if (/failed to fetch|networkerror|load failed/i.test(message)) {
-    return 'Could not reach Supabase. Check your internet/VPN, then verify .env values and restart `npm run dev`.';
+    return import.meta.env.DEV
+      ? 'Could not reach Supabase. Check your internet/VPN, then verify .env values and restart `npm run dev`.'
+      : 'Could not connect. Check your internet connection and try again.';
   }
 
   return message || fallback;

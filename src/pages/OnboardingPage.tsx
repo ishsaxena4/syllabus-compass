@@ -111,9 +111,6 @@ export default function OnboardingPage() {
       const { error } = await supabase.from("courses").insert(rows);
       if (error) throw error;
 
-      localStorage.setItem(`activeSemester:${user.id}`, semesterLabel);
-      localStorage.setItem(`onboardingComplete:${user.id}`, "true");
-
       setStep(3);
       toast.success("Semester and courses saved.");
     } catch (error: unknown) {
