@@ -9,7 +9,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import { ExtractionError, extractSyllabus, type SourceDocument } from './extract/claude.ts'
 import { cleanExtraction, isValidTimeZone } from './extract/resolve.ts'
 import { buildItemRows, buildSummary } from './rows.ts'
-import { countRuns, MAX_RUNS_PER_DAY } from './limits.ts'
+import { MAX_RUNS_PER_DAY, sizeProblem } from './limits.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -68,19 +68,6 @@ Deno.serve(async (req) => {
     const notes = typeof body.student_notes === 'string' ? body.student_notes.trim().slice(0, MAX_NOTES_LENGTH) : ''
     const timezone = typeof body.timezone === 'string' && isValidTimeZone(body.timezone) ? body.timezone : 'UTC'
 
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    const { data: recent, error: recentErr } = await supabase
-      .from('syllabus_uploads')
-      .select('processed_at')
-      .eq('user_id', user.id)
-      .gte('processed_at', since)
-    if (recentErr) return json({ error: `Could not check usage: ${recentErr.message}` }, 500)
-    if (countRuns((recent ?? []).map(r => r.processed_at)) >= MAX_RUNS_PER_DAY) {
-      return json({
-        error: `You've reached the limit of ${MAX_RUNS_PER_DAY} syllabus extractions in 24 hours. Please try again tomorrow.`,
-      }, 429)
-    }
-
     const { data: uploadRows, error: upErr } = await supabase
       .from('syllabus_uploads')
       .select('id, user_id, course_id, file_name, file_mime, file_path')
@@ -107,6 +94,18 @@ Deno.serve(async (req) => {
         mimeType: upload.file_mime || blob.type,
         bytes: new Uint8Array(await blob.arrayBuffer()),
       })
+      // Checked as each file arrives so an oversized batch stops before it's all in memory.
+      const tooBig = sizeProblem(documents.map(d => ({ name: d.name, mimeType: d.mimeType, size: d.bytes.length })))
+      if (tooBig) return json({ error: tooBig }, 413)
+    }
+
+    // Claimed just before calling Claude, so failed runs count too: they are billed.
+    const { data: allowed, error: limitErr } = await supabase.rpc('claim_extraction_run')
+    if (limitErr) return json({ error: `Could not check usage: ${limitErr.message}` }, 500)
+    if (!allowed) {
+      return json({
+        error: `You've reached the limit of ${MAX_RUNS_PER_DAY} syllabus extractions in 24 hours. Please try again tomorrow.`,
+      }, 429)
     }
 
     const run = await extractSyllabus({

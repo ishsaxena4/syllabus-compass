@@ -17,7 +17,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ASSIGNMENT_TYPES } from '@/types';
 import {
-  attentionReason, canAcceptItem, usePipeline, type ExtractedItem, type ExtractionSummary,
+  attentionReason, canAcceptItem, payloadOf, usePipeline,
+  type ExtractedItem, type ExtractionSummary, type ItemPayload,
 } from '@/lib/pipeline';
 import { getFriendlySupabaseErrorMessage } from '@/lib/runtimeConfig';
 import { formatClockRange } from '@/lib/time';
@@ -59,7 +60,7 @@ function StatusBadge({ confidence, reason }: { confidence: string; reason: strin
   );
 }
 
-function formatDueAt(dueAt: string | null, endAt?: string | null): string {
+function formatDueAt(dueAt: string | null | undefined, endAt?: string | null): string {
   if (!dueAt) return 'No date';
   const d = new Date(dueAt);
   if (Number.isNaN(d.getTime())) return dueAt;
@@ -70,7 +71,7 @@ function formatDueAt(dueAt: string | null, endAt?: string | null): string {
 }
 
 // Where the due time came from, so the student knows which times to double-check.
-function timeBasisLabel(p: Record<string, any>): { text: string; warn: boolean } | null {
+function timeBasisLabel(p: ItemPayload): { text: string; warn: boolean } | null {
   if (!p.due_at) return null;
   if (p.edited) return { text: 'Edited by you', warn: false };
   if (p.time_inferred) return { text: 'No time given; set to 11:59 PM', warn: true };
@@ -92,8 +93,8 @@ function toLocalInput(iso: string | null | undefined): string {
 }
 
 function sortByDue(a: ExtractedItem, b: ExtractedItem): number {
-  const da = (a.payload as any)?.due_at || '';
-  const db = (b.payload as any)?.due_at || '';
+  const da = payloadOf(a).due_at || '';
+  const db = payloadOf(b).due_at || '';
   return new Date(da).getTime() - new Date(db).getTime();
 }
 
@@ -111,7 +112,7 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
   const [summary, setSummary] = useState<ExtractionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editData, setEditData] = useState<Record<string, any>>({});
+  const [editData, setEditData] = useState<ItemPayload>({});
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [acceptingSelected, setAcceptingSelected] = useState(false);
@@ -142,20 +143,23 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
   }
 
   const assignments = items.filter(i => i.item_kind === 'assignment');
-  const dated = assignments.filter(i => (i.payload as any)?.due_at).sort(sortByDue);
+  const dated = assignments.filter(i => payloadOf(i).due_at).sort(sortByDue);
   // Mid-semester imports: anything already due is grouped and collapsed, and can be
   // imported as done so it never shows up as a to-do.
   const nowMs = Date.now();
-  const isPast = (i: ExtractedItem) => new Date((i.payload as any).due_at).getTime() < nowMs;
+  const isPast = (i: ExtractedItem) => {
+    const due = payloadOf(i).due_at;
+    return due ? new Date(due).getTime() < nowMs : false;
+  };
   const upcomingDated = dated.filter(i => !isPast(i));
   const pastDated = dated.filter(isPast);
-  const undated = assignments.filter(i => !(i.payload as any)?.due_at);
+  const undated = assignments.filter(i => !payloadOf(i).due_at);
   const emails = items.filter(i => i.item_kind === 'professor_email');
   const meetings = items.filter(i => i.item_kind === 'meeting_time');
   const flaggedCount = items.filter(i => attentionReason(i) !== null).length;
   const selectedItems = items.filter(i => selected.has(i.id));
   const selectedPastCount = selectedItems.filter(
-    i => i.item_kind === 'assignment' && (i.payload as any)?.due_at && isPast(i),
+    i => i.item_kind === 'assignment' && payloadOf(i).due_at && isPast(i),
   ).length;
 
   function toggleSelected(ids: string[], on: boolean) {
@@ -171,7 +175,7 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
 
   function startEdit(item: ExtractedItem) {
     setEditingId(item.id);
-    setEditData({ ...(item.payload as Record<string, any>) });
+    setEditData({ ...payloadOf(item) });
   }
 
   function cancelEdit() {
@@ -215,8 +219,8 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
           ? `Accepted: ${toAccept[0].title || toAccept[0].item_kind}`
           : `Accepted ${toAccept.length} items`,
       );
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to accept items');
+    } catch (err) {
+      toast.error(getFriendlySupabaseErrorMessage(err, 'Failed to accept items'));
     } finally {
       setBusyIds(prev => {
         const next = new Set(prev);
@@ -250,9 +254,9 @@ export function ReviewExtractedItems({ syllabusUploadIds }: Props) {
   function renderItemCard(item: ExtractedItem) {
     const isEditing = editingId === item.id;
     const isBusy = busyIds.has(item.id);
-    const p = item.payload as any;
+    const p = payloadOf(item);
     const basis = item.item_kind === 'assignment' ? timeBasisLabel(p) : null;
-    const meetingKind = item.item_kind === 'meeting_time' ? MEETING_KIND_LABELS[p?.kind] : null;
+    const meetingKind = item.item_kind === 'meeting_time' ? MEETING_KIND_LABELS[p.kind ?? 'other'] : null;
     const reason = attentionReason(item);
     const acceptable = canAcceptItem(item);
 

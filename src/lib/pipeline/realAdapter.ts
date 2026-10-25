@@ -1,10 +1,11 @@
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { isAssignmentType } from '@/types';
-import { canAcceptItem } from './review';
+import { canAcceptItem, payloadOf } from './review';
 import { formatClockRange } from '@/lib/time';
 import type {
   BatchProcessResult,
+  ItemPayload,
   ExtractionSummary,
   SyllabusPipelinePort,
   ExtractedItem,
@@ -47,7 +48,7 @@ const DAY_LETTERS: Record<string, string> = {
   mon: 'M', tue: 'T', wed: 'W', thu: 'R', fri: 'F', sat: 'Sa', sun: 'Su',
 };
 
-function describeMeeting(p: Record<string, any>): string {
+function describeMeeting(p: ItemPayload): string {
   const days = (p.days || []).map((d: string) => DAY_LETTERS[d] || d).join('');
   const times = formatClockRange(p.start_time, p.end_time);
   return [[days, times].filter(Boolean).join(' '), p.location].filter(Boolean).join(' · ');
@@ -140,14 +141,15 @@ export const realAdapter: SyllabusPipelinePort = {
           : `"${blocked.title}" is not linked to a course`,
       );
     }
-    const payloadOf = (i: ExtractedItem) => i.payload as Record<string, any>;
     const isOfficeHours = (i: ExtractedItem) => i.item_kind === 'meeting_time' && payloadOf(i).kind === 'office_hours';
 
-    // Assignments and meetings go in one insert each; course fields are per course.
+    // Assignments and meetings go in one write each; course fields are per course.
+    // Each step is safe to repeat: if a later step fails the items stay pending, and
+    // accepting again skips rows already linked to their extracted item.
     const now = Date.now();
     const assignments = items.filter(i => i.item_kind === 'assignment').map(i => {
       const p = payloadOf(i);
-      const isPast = Boolean(p.due_at) && new Date(p.due_at).getTime() < now;
+      const isPast = p.due_at ? new Date(p.due_at).getTime() < now : false;
       return {
         user_id: userId,
         course_id: i.course_id!,
@@ -160,27 +162,34 @@ export const realAdapter: SyllabusPipelinePort = {
         confidence: i.confidence,
         source_snippet: i.source_snippet,
         syllabus_upload_id: i.syllabus_upload_id,
+        extracted_item_id: i.id,
       };
     });
     if (assignments.length > 0) {
-      const { error } = await supabase.from('assignments').insert(assignments);
+      const { error } = await supabase
+        .from('assignments')
+        .upsert(assignments, { onConflict: 'extracted_item_id', ignoreDuplicates: true });
       if (error) throw error;
     }
 
     const meetings = items.filter(i => i.item_kind === 'meeting_time' && !isOfficeHours(i)).map(i => {
       const p = payloadOf(i);
+      // canAcceptItem (checked above) guarantees days and both times.
       return {
         user_id: userId,
         course_id: i.course_id!,
-        days: p.days,
-        start_time: p.start_time,
-        end_time: p.end_time,
+        days: p.days!,
+        start_time: p.start_time!,
+        end_time: p.end_time!,
         location: p.location || null,
         timezone: p.parser_context?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+        extracted_item_id: i.id,
       };
     });
     if (meetings.length > 0) {
-      const { error } = await supabase.from('course_meetings').insert(meetings);
+      const { error } = await supabase
+        .from('course_meetings')
+        .upsert(meetings, { onConflict: 'extracted_item_id', ignoreDuplicates: true });
       if (error) throw error;
     }
 

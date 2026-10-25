@@ -1,4 +1,4 @@
-import type { Json } from '@/integrations/supabase/types';
+import type { Database, Json } from '@/integrations/supabase/types';
 
 export type UploadStep =
   | 'idle'
@@ -13,6 +13,32 @@ export type ItemStatus = 'pending' | 'accepted' | 'discarded';
 // Where an assignment's due time came from (see extract/prompt.ts).
 export type TimeBasis = 'explicit' | 'course_policy' | 'meeting' | 'none';
 
+// extracted_items.payload, as written by process-syllabus/rows.ts. One shape covers all
+// three item kinds; each kind uses its own fields. A type alias (not an interface) so
+// it can be saved back as Json.
+export type ItemPayload = {
+  // assignment
+  title?: string;
+  type?: string;
+  due_at?: string | null;
+  end_at?: string | null;
+  available_from?: string | null;
+  time_basis?: TimeBasis;
+  time_inferred?: boolean;
+  ambiguity?: string | null;
+  edited?: boolean;
+  // meeting_time
+  kind?: string;
+  days?: Database['public']['Enums']['weekday'][];
+  start_time?: string | null;
+  end_time?: string | null;
+  location?: string | null;
+  // professor_email
+  email?: string;
+  name?: string | null;
+  parser_context?: { timezone?: string; file_name?: string; source_file_id?: string };
+};
+
 export interface ExtractedItem {
   id: string;
   syllabus_upload_id: string;
@@ -23,7 +49,6 @@ export interface ExtractedItem {
   confidence: Confidence;
   status: ItemStatus;
   source_snippet: string | null;
-  source_location: Json | null;
   reviewed_at: string | null;
   created_at: string;
   user_id: string;
@@ -68,7 +93,7 @@ export interface SyllabusPipelinePort {
 
   fetchExtractionSummary(uploadIds: string[]): Promise<ExtractionSummary | null>;
 
-  // Accepts several items together; all-or-nothing per destination table.
+  // Accepts several items together. Safe to retry: rows already imported are skipped.
   // markPastDone imports assignments that are already past due as completed.
   acceptItems(items: ExtractedItem[], userId: string, options?: { markPastDone?: boolean }): Promise<void>;
 

@@ -159,6 +159,8 @@ export function useAttentionItems() {
   });
 }
 
+// Onboarding is for accounts with no courses yet. Decided from the database, not this
+// browser, so signing in on a new device doesn't send a returning student through it again.
 export function useNeedsOnboarding() {
   const { user } = useAuth();
 
@@ -168,15 +170,9 @@ export function useNeedsOnboarding() {
     queryFn: async (): Promise<boolean> => {
       if (!user) return false;
 
-      const onboardingFlag = localStorage.getItem(`onboardingComplete:${user.id}`) === "true";
-      if (onboardingFlag) return false;
-
-      const semesterValue = localStorage.getItem(`activeSemester:${user.id}`);
-      if (!semesterValue) return true;
-
       const { count, error } = await supabase
         .from("courses")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("user_id", user.id);
 
       if (error) throw error;
@@ -195,11 +191,25 @@ export function useDeleteCourse() {
         throw new Error("You must be signed in to delete a course.");
       }
 
+      // The uploaded files hold personal details (names, emails), so they go with the
+      // course. Their paths are read first because the RPC deletes the upload rows.
+      const { data: uploads, error: uploadsError } = await supabase
+        .from("syllabus_uploads")
+        .select("file_path")
+        .eq("course_id", courseId);
+      if (uploadsError) throw uploadsError;
+
       const { error } = await supabase.rpc("delete_course_cascade", {
         p_course_id: courseId,
       });
-
       if (error) throw error;
+
+      const paths = (uploads || []).map((u) => u.file_path);
+      if (paths.length > 0) {
+        const { error: storageError } = await supabase.storage.from("syllabi").remove(paths);
+        // The course is already gone; leftover files are only visible to their owner.
+        if (storageError) console.error("Could not delete syllabus files", storageError);
+      }
     },
     onSuccess: async () => {
       await Promise.all([

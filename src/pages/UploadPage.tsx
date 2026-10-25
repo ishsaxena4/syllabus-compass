@@ -17,6 +17,7 @@ import { usePipeline, type UploadStep } from '@/lib/pipeline';
 import { ReviewExtractedItems } from '@/components/upload/ReviewExtractedItems';
 import { AddCourseDialog } from '@/components/shared/AddCourseDialog';
 import type { Tables } from '@/integrations/supabase/types';
+import { getFriendlySupabaseErrorMessage } from '@/lib/runtimeConfig';
 
 const PIPELINE_LABELS: Record<UploadStep, string> = {
   idle: '',
@@ -26,8 +27,11 @@ const PIPELINE_LABELS: Record<UploadStep, string> = {
   error: 'Something went wrong',
 };
 
+// Match supabase/functions/process-syllabus/limits.ts: Claude's API takes up to about
+// 20 MB of files per request and images up to 5 MB each.
 const MAX_FILES = 10;
-const MAX_FILE_BYTES = 25 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const SUPPORTED_EXTENSIONS = ['.pdf', '.docx', '.png', '.jpg', '.jpeg', '.webp'];
 
 function isSupportedSyllabusFile(file: File): boolean {
@@ -83,13 +87,15 @@ export default function UploadPage() {
     if (supported.length < incoming.length) {
       toast.error('Some files were skipped. Supported: PDF, DOCX, PNG, JPG, WEBP');
     }
-    const tooBig = supported.filter(f => f.size > MAX_FILE_BYTES);
+    const isTooBig = (f: File) =>
+      f.size > (f.type.startsWith('image/') ? MAX_IMAGE_BYTES : MAX_TOTAL_BYTES);
+    const tooBig = supported.filter(isTooBig);
     if (tooBig.length > 0) {
-      toast.error(`Files must be under 25 MB: ${tooBig.map(f => f.name).join(', ')}`);
+      toast.error(`Images must be under 5 MB and other files under 20 MB: ${tooBig.map(f => f.name).join(', ')}`);
     }
     setFiles(prev => {
       const names = new Set(prev.map(f => f.name));
-      const next = [...prev, ...supported.filter(f => f.size <= MAX_FILE_BYTES && !names.has(f.name))];
+      const next = [...prev, ...supported.filter(f => !isTooBig(f) && !names.has(f.name))];
       if (next.length > MAX_FILES) toast.error(`Up to ${MAX_FILES} files per course`);
       return next.slice(0, MAX_FILES);
     });
@@ -110,6 +116,10 @@ export default function UploadPage() {
     }
     if (files.length === 0) {
       toast.error('Please add at least one file');
+      return;
+    }
+    if (files.reduce((sum, f) => sum + f.size, 0) > MAX_TOTAL_BYTES) {
+      toast.error('These files are over 20 MB in total. Remove some or use smaller files.');
       return;
     }
 
@@ -134,10 +144,11 @@ export default function UploadPage() {
       setTimeout(() => {
         navigate(`/upload?review=${result.uploadIds.join(',')}`);
       }, 600);
-    } catch (err: any) {
+    } catch (err) {
+      const message = getFriendlySupabaseErrorMessage(err, 'Upload failed');
       setStep('error');
-      setErrorMsg(err.message || 'An unknown error occurred');
-      toast.error(err.message || 'Upload failed');
+      setErrorMsg(message);
+      toast.error(message);
     }
   }
 
@@ -272,7 +283,7 @@ export default function UploadPage() {
               </h3>
               <p className="text-sm text-muted-foreground mt-1">or click to browse</p>
               <p className="text-xs text-muted-foreground mt-3">
-                PDF, DOCX, PNG, JPG, WEBP &middot; up to {MAX_FILES} files
+                PDF, DOCX, PNG, JPG, WEBP &middot; up to {MAX_FILES} files, 20 MB in total
               </p>
             </>
           )}

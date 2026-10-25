@@ -6,9 +6,7 @@ import { realAdapter } from './realAdapter';
 
 const PipelineContext = createContext<SyllabusPipelinePort | null>(null);
 
-const ENV_MOCK =
-  typeof import.meta !== 'undefined' &&
-  (import.meta as any).env?.VITE_MOCK_PIPELINE === 'true';
+const ENV_MOCK = import.meta.env.VITE_MOCK_PIPELINE === 'true';
 
 export function PipelineProvider({ children }: { children: ReactNode }) {
   const [searchParams] = useSearchParams();

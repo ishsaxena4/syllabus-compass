@@ -1,9 +1,29 @@
-import { assertEquals } from 'jsr:@std/assert@1'
-import { countRuns } from './limits.ts'
+import { assertEquals, assertStringIncludes } from 'jsr:@std/assert@1'
+import { MAX_IMAGE_BYTES, MAX_TOTAL_BYTES, sizeProblem } from './limits.ts'
 
-Deno.test('countRuns counts each batch once and ignores unprocessed uploads', () => {
-  const a = '2026-10-13T20:00:00.000Z'
-  const b = '2026-10-13T21:00:00.000Z'
-  assertEquals(countRuns([a, a, a, b, null]), 2)
-  assertEquals(countRuns([]), 0)
+const MB = 1024 * 1024
+
+Deno.test('sizeProblem accepts files within both limits', () => {
+  assertEquals(sizeProblem([
+    { name: 'syllabus.pdf', mimeType: 'application/pdf', size: 8 * MB },
+    { name: 'schedule.png', mimeType: 'image/png', size: MAX_IMAGE_BYTES },
+  ]), null)
+  assertEquals(sizeProblem([]), null)
+})
+
+Deno.test('sizeProblem rejects an image over 5 MB, even when the total is small', () => {
+  const problem = sizeProblem([{ name: 'photo.jpg', mimeType: 'image/jpeg', size: MAX_IMAGE_BYTES + 1 }])
+  assertStringIncludes(problem ?? '', 'photo.jpg')
+})
+
+Deno.test('sizeProblem rejects files over 20 MB in total', () => {
+  const half = MAX_TOTAL_BYTES / 2
+  assertEquals(sizeProblem([
+    { name: 'a.pdf', mimeType: 'application/pdf', size: half },
+    { name: 'b.pdf', mimeType: 'application/pdf', size: half },
+  ]), null)
+  assertStringIncludes(sizeProblem([
+    { name: 'a.pdf', mimeType: 'application/pdf', size: half },
+    { name: 'b.pdf', mimeType: 'application/pdf', size: half + 1 },
+  ]) ?? '', '20 MB')
 })

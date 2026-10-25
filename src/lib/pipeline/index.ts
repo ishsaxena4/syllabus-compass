@@ -1,10 +1,11 @@
 export { PipelineProvider, usePipeline } from './context';
 export { mockAdapter } from './mockAdapter';
 export { realAdapter } from './realAdapter';
-export { attentionReason, canAcceptItem } from './review';
+export { attentionReason, canAcceptItem, payloadOf } from './review';
 export type {
   SyllabusPipelinePort,
   ExtractedItem,
+  ItemPayload,
   ExtractionSummary,
   BatchProcessResult,
   UploadStep,

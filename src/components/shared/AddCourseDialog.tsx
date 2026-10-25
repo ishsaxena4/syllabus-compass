@@ -21,6 +21,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { CourseColor } from '@/types';
+import { getFriendlySupabaseErrorMessage } from '@/lib/runtimeConfig';
 
 const COURSE_COLORS: { value: CourseColor; label: string }[] = [
   { value: 'sage', label: 'Sage' },
@@ -86,8 +87,8 @@ export function AddCourseDialog({ onCourseAdded }: AddCourseDialogProps) {
       resetForm();
       setOpen(false);
       onCourseAdded?.();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to add course');
+    } catch (err) {
+      toast.error(getFriendlySupabaseErrorMessage(err, 'Failed to add course'));
     } finally {
       setIsSubmitting(false);
     }

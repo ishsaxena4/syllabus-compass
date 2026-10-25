@@ -27,7 +27,8 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { ASSIGNMENT_TYPES } from '@/types';
+import { ASSIGNMENT_TYPES, isAssignmentType } from '@/types';
+import { getFriendlySupabaseErrorMessage } from '@/lib/runtimeConfig';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -94,7 +95,7 @@ export function AddAssignmentCard({ courses, fixedCourseId, onAssignmentAdded }:
       const { error } = await supabase.from('assignments').insert({
         title: title.trim(),
         course_id: fixedCourseId || courseId,
-        type: type as any,
+        type: isAssignmentType(type) ? type : 'other',
         due_at: dueAt,
         notes: notes.trim() || null,
         user_id: user.id,
@@ -109,8 +110,8 @@ export function AddAssignmentCard({ courses, fixedCourseId, onAssignmentAdded }:
       resetForm();
       setOpen(false);
       onAssignmentAdded?.();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to add assignment');
+    } catch (err) {
+      toast.error(getFriendlySupabaseErrorMessage(err, 'Failed to add assignment'));
     } finally {
       setIsSubmitting(false);
     }
